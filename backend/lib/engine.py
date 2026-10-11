@@ -326,7 +326,7 @@ async def sync_sender(sender: dict) -> int:
 
 async def sync_user(user_id: str) -> tuple[int, list[str]]:
     total, errors = 0, []
-    async for s in db.senders.find({"user_id": user_id, "imap_host": {"$ne": ""}, "status": {"$in": ["active", "error"]}}, {"_id": 0}):
+    async for s in db.senders.find({"user_id": user_id, "$or": [{"imap_host": {"$ne": ""}}, {"auth_type": "google_oauth"}], "status": {"$in": ["active", "error"]}}, {"_id": 0}):
         try:
             total += await sync_sender(s)
         except Exception as e:  # noqa: BLE001
@@ -335,7 +335,7 @@ async def sync_user(user_id: str) -> tuple[int, list[str]]:
 
 
 async def sync_tick() -> None:
-    async for s in db.senders.find({"imap_host": {"$ne": ""}, "status": "active"}, {"_id": 0}):
+    async for s in db.senders.find({"$or": [{"imap_host": {"$ne": ""}}, {"auth_type": "google_oauth"}], "status": "active"}, {"_id": 0}):
         try:
             await sync_sender(s)
         except Exception as e:  # noqa: BLE001
