@@ -321,31 +321,30 @@ async def sync_sender(sender: dict) -> int:
             if orig:
                 lead = await db.leads.find_one({"id": orig["lead_id"]}, {"_id": 0})
         if not lead:
-            # Match the sender's reply to a recently contacted lead, tolerating Re:/Fwd: prefixes.
+            # Match the exact sender address, then use recent send history as a fallback.
             recent = await db.leads.find(
                 {"user_id": uid, "email": m["from_email"], "current_step": {"$gt": 0}},
                 {"_id": 0},
             ).sort("last_sent_at", -1).to_list(50)
-            def normalise_subject(value: str) -> str:
-                value = " ".join((value or "").strip().split()).lower()
-                while True:
-                    updated = value
-                    for prefix in ("re:", "fw:", "fwd:"):
-                        if value.startswith(prefix):
-                            value = value[len(prefix):].strip()
-                    if updated == value:
-                        return value
-            incoming_subject = normalise_subject(m.get("subject", ""))
-            lead = next(
-                (candidate for candidate in recent
-                 if normalise_subject(candidate.get("last_subject", "")) == incoming_subject
-                 and candidate.get("last_subject")),
-                None,
-            )
-            if not lead and len(recent) == 1:
+            if len(recent) == 1:
                 lead = recent[0]
-            if not lead and recent:
-                lead = recent[0]
+            elif recent:
+                incoming_subject = " ".join((m.get("subject") or "").strip().split()).lower()
+                def normalise_subject(value: str) -> str:
+                    value = " ".join((value or "").strip().split()).lower()
+                    while True:
+                        updated = value
+                        for prefix in ("re:", "fw:", "fwd:"):
+                            if value.startswith(prefix):
+                                value = value[len(prefix):].strip()
+                        if value == updated:
+                            return value
+                matching = [
+                    candidate for candidate in recent
+                    if normalise_subject(candidate.get("last_subject", "")) == normalise_subject(incoming_subject)
+                    and candidate.get("last_subject")
+                ]
+                lead = matching[0] if matching else recent[0]
         if not lead:
             continue
         body = mailer.strip_quoted(m["body"])
