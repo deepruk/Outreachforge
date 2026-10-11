@@ -26,7 +26,7 @@ export default function Dashboard() {
         <StatCard testId="kpi-open-rate" label="Open rate" value={r(t?.open_rate)} icon={Eye} sub={`${v(t?.opened)} unique opens`} />
         <StatCard testId="kpi-click-rate" label="Click rate" value={r(t?.click_rate)} icon={MousePointerClick} accent="text-amber-300" sub={`${v(t?.clicked)} clicked`} />
         <StatCard testId="kpi-reply-rate" label="Reply rate" value={r(t?.reply_rate)} icon={MessageSquareReply} accent="text-emerald-300" sub={`${v(t?.replied)} replies`} />
-        <StatCard testId="kpi-bounce-rate" label="Bounce rate" value={r(t?.bounce_rate)} icon={ShieldAlert} accent="text-red-300" sub={`${v(t?.bounced)} bounced`} className="col-span-2 lg:col-span-1" />
+        <StatCard testId="kpi-bounce-rate" label="Bounce rate" value={r(t?.bounce_rate)} icon={ShieldAlert} accent="text-red-300" sub={`${v(t?.bounced)} bounced · ${v(t?.unsubscribed)} unsubscribed`} className="col-span-2 lg:col-span-1" />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-12">
@@ -100,9 +100,9 @@ export default function Dashboard() {
               <li key={s.id} data-testid={`dashboard-sender-${s.id}`}>
                 <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
                   <span className="truncate font-mono text-slate-300">{s.email}</span>
-                  <span className="shrink-0 font-mono text-slate-400">{s.sent_today}/{s.daily_limit}</span>
+                  <span className="shrink-0 font-mono text-slate-400">{s.sent_today}/{s.effective_limit}</span>
                 </div>
-                <RateBar value={(s.sent_today / s.daily_limit) * 100} color={s.status === "error" ? "bg-red-500" : "bg-cyan-500"} />
+                <RateBar value={(s.sent_today / Math.max(1, s.effective_limit)) * 100} color={s.status === "error" ? "bg-red-500" : "bg-cyan-500"} />
               </li>
             ))}
             {senders.data && senders.data.length === 0 && (

@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, MoreHorizontal, Pause, Play, Plug, Plus, Server, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Flame, Loader2, MoreHorizontal, Pause, Play, Plug, Plus, Server, SlidersHorizontal, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
-import type { ConnectionTest, Sender, SenderIn } from "@/lib/types";
+import type { ConnectionTest, Sender, SenderIn, SenderUpdate } from "@/lib/types";
+import { Switch } from "@/components/ui/switch";
 import { SENDER_STATUS, errMsg, fmt, timeAgo } from "@/lib/format";
 import AppShell, { PageHeader } from "@/components/AppShell";
 import { EmptyState, Pill, RateBar, StatCard } from "@/components/ui-kit";
@@ -24,7 +25,74 @@ const PRESETS: Record<string, Partial<SenderIn> & { label: string; hint: string 
 const EMPTY: SenderIn = {
   email: "", from_name: "", smtp_host: "smtp.gmail.com", smtp_port: 587, smtp_security: "starttls", smtp_user: "", smtp_pass: "",
   imap_host: "imap.gmail.com", imap_port: 993, imap_user: "", imap_pass: "", daily_limit: 40,
+  warmup_enabled: true, warmup_start: 5, warmup_increment: 3,
 };
+
+function WarmupFields({ v, onChange, idPrefix }: {
+  v: { daily_limit: number; warmup_enabled: boolean; warmup_start: number; warmup_increment: number };
+  onChange: (p: Partial<SenderIn>) => void; idPrefix: string;
+}) {
+  const days = v.warmup_enabled ? Math.max(1, Math.ceil((v.daily_limit - v.warmup_start) / Math.max(1, v.warmup_increment)) + 1) : 0;
+  return (
+    <fieldset className="space-y-3 rounded-lg border border-orange-500/20 bg-orange-500/[0.03] p-4" data-testid={`${idPrefix}-warmup-fieldset`}>
+      <label className="flex cursor-pointer items-center justify-between gap-4">
+        <div>
+          <p className="flex items-center gap-1.5 text-sm font-medium text-slate-100"><Flame className="size-4 text-orange-400" />Warm-up ramp</p>
+          <p className="text-xs text-slate-500">Start low and raise the daily cap each day to build sender reputation.</p>
+        </div>
+        <Switch checked={v.warmup_enabled} onCheckedChange={(c) => onChange({ warmup_enabled: c })} data-testid={`${idPrefix}-warmup-switch`} />
+      </label>
+      {v.warmup_enabled && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5"><Label>Start at (emails/day)</Label><Input type="number" min={1} value={v.warmup_start} onChange={(e) => onChange({ warmup_start: Math.max(1, Number(e.target.value) || 1) })} data-testid={`${idPrefix}-warmup-start-input`} /></div>
+            <div className="space-y-1.5"><Label>Increase per day</Label><Input type="number" min={1} value={v.warmup_increment} onChange={(e) => onChange({ warmup_increment: Math.max(1, Number(e.target.value) || 1) })} data-testid={`${idPrefix}-warmup-increment-input`} /></div>
+          </div>
+          <p className="text-xs text-slate-400" data-testid={`${idPrefix}-warmup-summary`}>
+            Day 1: {Math.min(v.warmup_start, v.daily_limit)}/day → reaches the full {v.daily_limit}/day on day {days}.
+          </p>
+        </>
+      )}
+    </fieldset>
+  );
+}
+
+function EditLimitsDialog({ sender, onClose }: { sender: Sender | null; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [v, setV] = useState({ daily_limit: 40, warmup_enabled: false, warmup_start: 5, warmup_increment: 3, from_name: "" });
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  if (sender && loadedFor !== sender.id) {
+    setLoadedFor(sender.id);
+    setV({ daily_limit: sender.daily_limit, warmup_enabled: sender.warmup_enabled, warmup_start: sender.warmup_start, warmup_increment: sender.warmup_increment, from_name: sender.from_name });
+  }
+  const save = useMutation({
+    mutationFn: () => apiPatch<Sender>(`/senders/${sender?.id}`, v satisfies SenderUpdate),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["senders"] }); toast.success("Sending limits saved"); onClose(); },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+  return (
+    <Dialog open={!!sender} onOpenChange={(o) => { if (!o) { onClose(); setLoadedFor(null); } }}>
+      <DialogContent className="sm:max-w-md" data-testid="edit-sender-dialog">
+        <DialogHeader>
+          <DialogTitle>Sending limits</DialogTitle>
+          <DialogDescription className="font-mono">{sender?.email}</DialogDescription>
+        </DialogHeader>
+        <div className="my-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5"><Label>From name</Label><Input value={v.from_name} onChange={(e) => setV({ ...v, from_name: e.target.value })} data-testid="edit-sender-from-name-input" /></div>
+            <div className="space-y-1.5"><Label>Max per day</Label><Input type="number" min={1} max={2000} value={v.daily_limit} onChange={(e) => setV({ ...v, daily_limit: Math.max(1, Number(e.target.value) || 1) })} data-testid="edit-sender-daily-limit-input" /></div>
+          </div>
+          <WarmupFields v={v} onChange={(p) => setV({ ...v, ...p })} idPrefix="edit-sender" />
+          {sender?.warmup_enabled && <p className="text-xs text-slate-500">Turning warm-up off and on again restarts the ramp from day 1.</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} data-testid="edit-sender-cancel">Cancel</Button>
+          <Button onClick={() => save.mutate()} disabled={save.isPending} data-testid="edit-sender-save">{save.isPending && <Loader2 className="size-4 animate-spin" />}Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function TestResult({ r }: { r: ConnectionTest }) {
   const row = (ok: boolean, label: string, err: string) => (
@@ -118,6 +186,7 @@ function AddSenderDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 <div className="space-y-1.5 sm:col-span-3"><Label>Password</Label><Input type="password" value={f.imap_pass} onChange={(e) => set("imap_pass", e.target.value)} placeholder="Same as SMTP" data-testid="sender-imap-pass-input" /></div>
               </div>
             </fieldset>
+            <WarmupFields v={f} onChange={(p) => setF((prev) => ({ ...prev, ...p }))} idPrefix="sender" />
             {result && <TestResult r={result} />}
           </div>
           <DialogFooter>
@@ -138,6 +207,7 @@ export default function SenderAccounts() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [testRes, setTestRes] = useState<{ id: string; r: ConnectionTest } | null>(null);
+  const [editing, setEditing] = useState<Sender | null>(null);
   const senders = useQuery({ queryKey: ["senders"], queryFn: () => apiGet<Sender[]>("/senders") });
   const inv = () => qc.invalidateQueries({ queryKey: ["senders"] });
   const patch = useMutation({
@@ -156,7 +226,7 @@ export default function SenderAccounts() {
     onError: (e) => toast.error(errMsg(e)),
   });
   const list = senders.isError ? [] : senders.data ?? [];
-  const cap = list.reduce((a, s) => a + s.daily_limit, 0);
+  const cap = list.reduce((a, s) => a + s.effective_limit, 0);
   const today = list.reduce((a, s) => a + s.sent_today, 0);
   const healthy = list.filter((s) => s.status === "active" || s.status === "demo").length;
 
@@ -170,7 +240,7 @@ export default function SenderAccounts() {
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard testId="senders-kpi-total" label="Connected inboxes" value={fmt(list.length)} icon={Server} />
         <StatCard testId="senders-kpi-healthy" label="Healthy" value={`${healthy}/${list.length}`} icon={CheckCircle2} accent="text-emerald-300" />
-        <StatCard testId="senders-kpi-capacity" label="Daily capacity" value={fmt(cap)} sub="emails / day" />
+        <StatCard testId="senders-kpi-capacity" label="Daily capacity" value={fmt(cap)} sub={`emails / day · ${list.filter((s) => s.warmup_enabled && s.effective_limit < s.daily_limit).length} warming up`} />
         <StatCard testId="senders-kpi-today" label="Sent today" value={fmt(today)} sub={`${cap ? ((today / cap) * 100).toFixed(0) : 0}% of capacity`} />
       </div>
 
@@ -192,6 +262,7 @@ export default function SenderAccounts() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => test.mutate(s.id)} data-testid={`sender-test-${s.id}`}><Plug className="size-4" />Test connection</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setEditing(s)} data-testid={`sender-edit-limits-${s.id}`}><SlidersHorizontal className="size-4" />Limits & warm-up</DropdownMenuItem>
                     {s.status !== "demo" && (s.status === "paused" ? (
                       <DropdownMenuItem onClick={() => patch.mutate({ id: s.id, body: { status: "active" } })} data-testid={`sender-resume-${s.id}`}><Play className="size-4" />Resume sending</DropdownMenuItem>
                     ) : (
@@ -202,23 +273,37 @@ export default function SenderAccounts() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <div className="mt-3"><Pill cls={SENDER_STATUS[s.status].cls} testId={`sender-status-${s.id}`}>{SENDER_STATUS[s.status].label}</Pill></div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <Pill cls={SENDER_STATUS[s.status].cls} testId={`sender-status-${s.id}`}>{SENDER_STATUS[s.status].label}</Pill>
+                {s.warmup_enabled && (
+                  <Pill cls={s.effective_limit < s.daily_limit ? "border-orange-500/30 bg-orange-500/10 text-orange-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"} testId={`sender-warmup-${s.id}`}>
+                    <Flame className="size-3" />{s.effective_limit < s.daily_limit ? `Warm-up day ${s.warmup_day}` : "Warm-up complete"}
+                  </Pill>
+                )}
+              </div>
               {s.last_error && <p className="mt-2 line-clamp-2 text-xs text-red-300" data-testid={`sender-error-${s.id}`}>{s.last_error}</p>}
               <div className="mt-5">
-                <div className="mb-1.5 flex justify-between font-mono text-xs"><span className="text-slate-500">Sent today</span><span className="text-slate-200">{s.sent_today}/{s.daily_limit}</span></div>
-                <RateBar value={(s.sent_today / s.daily_limit) * 100} color={s.status === "error" ? "bg-red-500" : "bg-cyan-500"} />
+                <div className="mb-1.5 flex justify-between font-mono text-xs"><span className="text-slate-500">Sent today</span><span className="text-slate-200">{s.sent_today}/{s.effective_limit}</span></div>
+                <RateBar value={(s.sent_today / Math.max(1, s.effective_limit)) * 100} color={s.status === "error" ? "bg-red-500" : "bg-cyan-500"} />
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2 border-t border-[#1E293B] pt-4 text-center font-mono">
                 <div><p className="text-base text-white">{fmt(s.sent_total)}</p><p className="text-[10px] uppercase text-slate-500">Sent</p></div>
                 <div><p className="text-base text-emerald-300">{fmt(s.reply_count)}</p><p className="text-[10px] uppercase text-slate-500">Replies</p></div>
                 <div><p className="text-xs leading-6 text-slate-300">{s.imap_host ? timeAgo(s.last_synced_at) : "off"}</p><p className="text-[10px] uppercase text-slate-500">IMAP sync</p></div>
               </div>
+              {s.warmup_enabled && s.effective_limit < s.daily_limit && (
+                <div className="mt-3" data-testid={`sender-warmup-progress-${s.id}`}>
+                  <div className="mb-1 flex justify-between font-mono text-[11px] text-slate-500"><span>Ramp {s.effective_limit}/{s.daily_limit} per day</span><span>+{s.warmup_increment}/day</span></div>
+                  <RateBar value={(s.effective_limit / s.daily_limit) * 100} color="bg-orange-400" />
+                </div>
+              )}
               {testRes?.id === s.id && <div className="mt-4"><TestResult r={testRes.r} /></div>}
             </div>
           ))}
         </div>
       )}
       <AddSenderDialog open={open} onOpenChange={setOpen} />
+      <EditLimitsDialog sender={editing} onClose={() => setEditing(null)} />
     </AppShell>
   );
 }

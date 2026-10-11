@@ -5,7 +5,7 @@ from lib.db import db
 from lib.util import now, pct
 
 PROJ = {"_id": 0, "campaign_id": 1, "step_index": 1, "sent_at": 1, "opened_at": 1,
-        "clicked_at": 1, "replied_at": 1, "bounced": 1, "lead_id": 1}
+        "clicked_at": 1, "replied_at": 1, "bounced": 1, "lead_id": 1, "unsubscribed": 1, "variant": 1}
 
 
 def totals_from(msgs: list[dict], leads: int) -> dict:
@@ -15,10 +15,11 @@ def totals_from(msgs: list[dict], leads: int) -> dict:
     clicked = len({m["lead_id"] for m in msgs if m.get("clicked_at")})
     replied = len({m["lead_id"] for m in msgs if m.get("replied_at")})
     bounced = len({m["lead_id"] for m in msgs if m.get("bounced")})
+    unsubscribed = len({m["lead_id"] for m in msgs if m.get("unsubscribed")})
     contacted = len(lead_ids)
     return {
         "leads": leads, "contacted": contacted, "sent": sent, "opened": opened, "clicked": clicked,
-        "replied": replied, "bounced": bounced,
+        "replied": replied, "bounced": bounced, "unsubscribed": unsubscribed,
         "open_rate": pct(opened, contacted), "click_rate": pct(clicked, contacted),
         "reply_rate": pct(replied, contacted), "bounce_rate": pct(bounced, contacted),
     }
@@ -69,5 +70,16 @@ def build_steps(msgs: list[dict], steps: list[dict]) -> list[dict]:
             "sent": len(ms), "opened": sum(1 for m in ms if m.get("opened_at")),
             "clicked": sum(1 for m in ms if m.get("clicked_at")),
             "replied": sum(1 for m in ms if m.get("replied_at")),
+            "ab_winner": st.get("ab_winner"),
+            "variants": variant_stats(ms, st) if (st.get("subject_b") or "").strip() else [],
         })
+    return out
+
+
+def variant_stats(ms: list[dict], st: dict) -> list[dict]:
+    out = []
+    for v, subj in (("a", st.get("subject") or ""), ("b", st.get("subject_b") or "")):
+        vm = [m for m in ms if (m.get("variant") or "a") == v]
+        opened = sum(1 for m in vm if m.get("opened_at"))
+        out.append({"variant": v, "subject": subj, "sent": len(vm), "opened": opened, "open_rate": pct(opened, len(vm))})
     return out

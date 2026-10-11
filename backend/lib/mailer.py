@@ -15,20 +15,28 @@ TIMEOUT = 20
 URL_RE = re.compile(r"(https?://[^\s<>\"']+)")
 
 
-def render_vars(text: str, lead: dict) -> str:
-    values = {
-        "first_name": lead.get("first_name") or "there",
-        "last_name": lead.get("last_name") or "",
-        "company": lead.get("company") or "your company",
-        "title": lead.get("title") or "",
-        "email": lead.get("email") or "",
-    }
+DEFAULTS = {"first_name": "there", "company": "your company"}
+VAR_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*(?:\|([^}]*))?\}\}")
+
+
+def render_vars(text: str, lead: dict, extra: dict | None = None) -> str:
+    """{{key}} or {{key|fallback}} — key is a standard lead field, a CSV custom column, or an extra (unsubscribe_link)."""
+    values = {k: str(v) for k, v in (lead.get("custom") or {}).items()}
+    for k in ("first_name", "last_name", "company", "title", "email"):
+        values[k] = lead.get(k) or ""
+    values.update(extra or {})
 
     def sub(m: re.Match) -> str:
         key = m.group(1).strip().lower()
-        return values.get(key, m.group(0))
+        fallback = m.group(2)
+        val = values.get(key, "")
+        if val:
+            return val
+        if fallback is not None:
+            return fallback.strip()
+        return DEFAULTS.get(key, "" if key in values else m.group(0))
 
-    return re.sub(r"\{\{\s*([a-zA-Z_]+)\s*\}\}", sub, text)
+    return VAR_RE.sub(sub, text)
 
 
 def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_clicks: bool) -> str:
@@ -36,7 +44,8 @@ def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_c
 
     def link(m: re.Match) -> str:
         url = html.unescape(m.group(1))
-        href = f"{base_url}/api/t/c/{msg_id}?u={quote(url, safe='')}" if track_clicks else url
+        tracked = track_clicks and "/api/u/" not in url  # never wrap the unsubscribe link
+        href = f"{base_url}/api/t/c/{msg_id}?u={quote(url, safe='')}" if tracked else url
         return f'<a href="{html.escape(href)}">{html.escape(url)}</a>'
 
     escaped = URL_RE.sub(link, escaped)
@@ -61,7 +70,7 @@ def _smtp(sender: dict) -> smtplib.SMTP:
 
 
 def send_email(sender: dict, to: str, subject: str, html_body: str, text_body: str,
-               in_reply_to: str | None = None) -> str:
+               in_reply_to: str | None = None, unsubscribe_url: str | None = None) -> str:
     """Send one message; returns the Message-ID header used."""
     domain = sender["email"].split("@")[-1]
     message_id = make_msgid(domain=domain)
@@ -73,6 +82,9 @@ def send_email(sender: dict, to: str, subject: str, html_body: str, text_body: s
     if in_reply_to:
         msg["In-Reply-To"] = in_reply_to
         msg["References"] = in_reply_to
+    if unsubscribe_url:
+        msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
+        msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
     s = _smtp(sender)

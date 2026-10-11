@@ -21,6 +21,18 @@ export interface SenderIn {
   imap_user: string;
   imap_pass: string;
   daily_limit: number;
+  warmup_enabled: boolean;
+  warmup_start: number;
+  warmup_increment: number;
+}
+
+export interface SenderUpdate {
+  from_name?: string;
+  daily_limit?: number;
+  status?: "active" | "paused";
+  warmup_enabled?: boolean;
+  warmup_start?: number;
+  warmup_increment?: number;
 }
 
 export interface Sender {
@@ -33,6 +45,11 @@ export interface Sender {
   imap_host: string;
   imap_port: number;
   daily_limit: number;
+  effective_limit: number;
+  warmup_enabled: boolean;
+  warmup_start: number;
+  warmup_increment: number;
+  warmup_day: number;
   status: SenderStatus;
   last_error: string;
   sent_today: number;
@@ -54,6 +71,8 @@ export type CampaignStatus = "draft" | "active" | "paused" | "completed";
 export interface Step {
   id: string;
   subject: string;
+  subject_b: string;
+  ab_winner: "a" | "b" | null;
   body: string;
   delay_days: number;
 }
@@ -66,6 +85,7 @@ export interface StatTotals {
   clicked: number;
   replied: number;
   bounced: number;
+  unsubscribed: number;
   open_rate: number;
   click_rate: number;
   reply_rate: number;
@@ -82,6 +102,8 @@ export interface Campaign {
   track_opens: boolean;
   track_clicks: boolean;
   stop_on_reply: boolean;
+  include_unsubscribe: boolean;
+  custom_fields: string[];
   send_start_hour: number;
   send_end_hour: number;
   created_at: string;
@@ -91,7 +113,7 @@ export interface Campaign {
 }
 
 export type CampaignUpdate = Partial<
-  Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "send_start_hour" | "send_end_hour">
+  Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "include_unsubscribe" | "send_start_hour" | "send_end_hour">
 >;
 
 export type LeadStatus = "pending" | "in_progress" | "completed" | "replied" | "bounced" | "unsubscribed";
@@ -102,6 +124,7 @@ export interface LeadIn {
   last_name: string;
   company: string;
   title: string;
+  custom: Record<string, string>;
 }
 
 export interface Lead extends LeadIn {
@@ -129,6 +152,14 @@ export interface SeriesPoint {
   replied: number;
 }
 
+export interface VariantStat {
+  variant: "a" | "b";
+  subject: string;
+  sent: number;
+  opened: number;
+  open_rate: number;
+}
+
 export interface StepStat {
   step: number;
   subject: string;
@@ -136,6 +167,8 @@ export interface StepStat {
   opened: number;
   clicked: number;
   replied: number;
+  ab_winner: "a" | "b" | null;
+  variants: VariantStat[];
 }
 
 export interface CampaignRow {

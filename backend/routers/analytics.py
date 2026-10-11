@@ -2,10 +2,11 @@ import base64
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from lib.auth import current_user
 from lib.db import db
+from lib.engine import unsubscribe_message
 from lib.stats import PROJ, build_series, campaign_totals, totals_from
 from lib.util import days_ago, now
 from models.schemas import AnalyticsOut, CampaignRow, StatTotals
@@ -62,3 +63,25 @@ async def track_click(mid: str, u: str = ""):
             upd["$set"] = sets
         await db.messages.update_one({"id": mid}, upd)
     return RedirectResponse(url, status_code=302)
+
+
+UNSUB_PAGE = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Unsubscribed</title></head><body style="margin:0;background:#0B0F17;font-family:Arial,sans-serif;color:#F8FAFC;
+display:flex;min-height:100vh;align-items:center;justify-content:center"><div style="max-width:420px;padding:40px;
+border:1px solid #1E293B;border-radius:14px;background:#111827;text-align:center"><div style="font-size:34px">&#10003;</div>
+<h1 style="font-size:22px;margin:12px 0 8px">{title}</h1><p style="color:#94A3B8;line-height:1.5;margin:0">{body}</p></div></body></html>"""
+
+
+@router.get("/u/{mid}", response_class=HTMLResponse)
+async def unsubscribe_get(mid: str):
+    ok = await unsubscribe_message(mid)
+    if not ok:
+        return HTMLResponse(UNSUB_PAGE.format(title="Link expired", body="This unsubscribe link is no longer valid."), status_code=404)
+    return HTMLResponse(UNSUB_PAGE.format(title="You're unsubscribed", body="You won't receive any more emails from this sender."))
+
+
+@router.post("/u/{mid}")
+async def unsubscribe_post(mid: str):
+    """RFC 8058 one-click (List-Unsubscribe-Post) from mail clients."""
+    await unsubscribe_message(mid)
+    return {"ok": True}

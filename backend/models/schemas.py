@@ -40,6 +40,9 @@ class SenderIn(BaseModel):
     imap_user: str = ""
     imap_pass: str = ""
     daily_limit: int = Field(default=40, ge=1, le=2000)
+    warmup_enabled: bool = False
+    warmup_start: int = Field(default=5, ge=1, le=500)
+    warmup_increment: int = Field(default=3, ge=1, le=200)
 
 
 class SenderUpdate(BaseModel):
@@ -48,6 +51,9 @@ class SenderUpdate(BaseModel):
     status: Optional[Literal["active", "paused"]] = None
     smtp_pass: Optional[str] = None
     imap_pass: Optional[str] = None
+    warmup_enabled: Optional[bool] = None
+    warmup_start: Optional[int] = Field(default=None, ge=1, le=500)
+    warmup_increment: Optional[int] = Field(default=None, ge=1, le=200)
 
 
 class SenderOut(BaseModel):
@@ -60,6 +66,11 @@ class SenderOut(BaseModel):
     imap_host: str
     imap_port: int
     daily_limit: int
+    effective_limit: int = 0
+    warmup_enabled: bool = False
+    warmup_start: int = 5
+    warmup_increment: int = 3
+    warmup_day: int = 0
     status: SenderStatus
     last_error: str = ""
     sent_today: int = 0
@@ -83,6 +94,8 @@ CampaignStatus = Literal["draft", "active", "paused", "completed"]
 class Step(BaseModel):
     id: str
     subject: str = ""
+    subject_b: str = ""
+    ab_winner: Optional[Literal["a", "b"]] = None
     body: str = ""
     delay_days: int = Field(default=0, ge=0, le=60)
 
@@ -99,6 +112,7 @@ class CampaignUpdate(BaseModel):
     track_opens: Optional[bool] = None
     track_clicks: Optional[bool] = None
     stop_on_reply: Optional[bool] = None
+    include_unsubscribe: Optional[bool] = None
     send_start_hour: Optional[int] = Field(default=None, ge=0, le=23)
     send_end_hour: Optional[int] = Field(default=None, ge=1, le=24)
 
@@ -111,6 +125,7 @@ class StatTotals(BaseModel):
     clicked: int = 0
     replied: int = 0
     bounced: int = 0
+    unsubscribed: int = 0
     open_rate: float = 0
     click_rate: float = 0
     reply_rate: float = 0
@@ -127,6 +142,8 @@ class CampaignOut(BaseModel):
     track_opens: bool
     track_clicks: bool
     stop_on_reply: bool
+    include_unsubscribe: bool = True
+    custom_fields: list[str] = []
     send_start_hour: int
     send_end_hour: int
     created_at: datetime
@@ -145,6 +162,7 @@ class LeadIn(BaseModel):
     last_name: str = ""
     company: str = ""
     title: str = ""
+    custom: dict[str, str] = {}
 
 
 class LeadImport(BaseModel):
@@ -164,6 +182,7 @@ class LeadOut(BaseModel):
     last_name: str
     company: str
     title: str
+    custom: dict[str, str] = {}
     status: LeadStatus
     current_step: int
     next_send_at: Optional[datetime] = None
@@ -182,6 +201,14 @@ class SeriesPoint(BaseModel):
     replied: int = 0
 
 
+class VariantStat(BaseModel):
+    variant: Literal["a", "b"]
+    subject: str
+    sent: int = 0
+    opened: int = 0
+    open_rate: float = 0
+
+
 class StepStat(BaseModel):
     step: int
     subject: str
@@ -189,6 +216,8 @@ class StepStat(BaseModel):
     opened: int = 0
     clicked: int = 0
     replied: int = 0
+    ab_winner: Optional[Literal["a", "b"]] = None
+    variants: list[VariantStat] = []
 
 
 class CampaignRow(BaseModel):

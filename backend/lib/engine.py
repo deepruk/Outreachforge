@@ -7,12 +7,14 @@ from datetime import timedelta
 
 from lib import mailer
 from lib.db import db
-from lib.util import new_id, now, start_of_today
+from lib.util import new_id, now, start_of_today, warmup_info
 
 log = logging.getLogger("engine")
 OOO_RE = re.compile(r"out of (the )?office|automatic reply|auto(-| )?reply|on vacation|on leave", re.I)
 BOUNCE_FROM = ("mailer-daemon", "postmaster")
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+AB_MIN_SENDS = int(os.environ.get("AB_MIN_SENDS", "20"))  # per variant before a winner is picked
+UNSUB_FOOTER = "\n\n--\nNot interested? Unsubscribe here: {url}"
 
 
 def base_url() -> str:
@@ -23,11 +25,52 @@ async def sent_today(sender_id: str) -> int:
     return await db.messages.count_documents({"sender_id": sender_id, "sent_at": {"$gte": start_of_today()}})
 
 
-async def deliver(sender: dict, to: str, subject: str, html: str, text: str, in_reply_to: str | None) -> str:
+async def deliver(sender: dict, to: str, subject: str, html: str, text: str, in_reply_to: str | None,
+                  unsubscribe_url: str | None = None) -> str:
     """Real SMTP for real senders; demo senders simulate delivery."""
     if sender.get("status") == "demo":
         return f"<{new_id()}@{sender['email'].split('@')[-1]}>"
-    return await asyncio.to_thread(mailer.send_email, sender, to, subject, html, text, in_reply_to)
+    return await asyncio.to_thread(mailer.send_email, sender, to, subject, html, text, in_reply_to, unsubscribe_url)
+
+
+async def pick_variant(c: dict, idx: int, step: dict) -> str:
+    """A/B subject: split evenly until both variants reach AB_MIN_SENDS, then lock in the higher open rate."""
+    if not (step.get("subject_b") or "").strip():
+        return "a"
+    winner, sent = await decide_winner(c, idx, step)
+    if winner:
+        return winner
+    return "a" if sent["a"] <= sent["b"] else "b"
+
+
+async def decide_winner(c: dict, idx: int, step: dict) -> tuple[str | None, dict]:
+    """Lock in the higher-open-rate subject once both variants have AB_MIN_SENDS sends."""
+    if step.get("ab_winner") in ("a", "b"):
+        return step["ab_winner"], {"a": 0, "b": 0}
+    base = {"campaign_id": c["id"], "step_index": idx}
+    sent = {v: await db.messages.count_documents({**base, "variant": v}) for v in ("a", "b")}
+    if min(sent.values()) < AB_MIN_SENDS:
+        return None, sent
+    opened = {v: await db.messages.count_documents({**base, "variant": v, "opened_at": {"$ne": None}}) for v in ("a", "b")}
+    winner = "b" if opened["b"] / sent["b"] > opened["a"] / sent["a"] else "a"
+    await db.campaigns.update_one({"id": c["id"]}, {"$set": {f"steps.{idx}.ab_winner": winner}})
+    step["ab_winner"] = winner
+    log.info("A/B winner for campaign %s step %s: %s", c["id"], idx + 1, winner)
+    return winner, sent
+
+
+async def unsubscribe_message(mid: str) -> bool:
+    m = await db.messages.find_one({"id": mid}, {"_id": 0})
+    if not m:
+        return False
+    await db.messages.update_one({"id": mid}, {"$set": {"unsubscribed": True}})
+    await db.unsubscribes.update_one(
+        {"user_id": m["user_id"], "email": m["to_email"].lower()},
+        {"$setOnInsert": {"id": new_id(), "at": now(), "campaign_id": m["campaign_id"]}}, upsert=True)
+    await db.leads.update_many(
+        {"user_id": m["user_id"], "email": m["to_email"].lower(), "status": {"$in": ["pending", "in_progress", "completed"]}},
+        {"$set": {"status": "unsubscribed", "next_send_at": None}})
+    return True
 
 
 async def process_campaign(c: dict) -> None:
@@ -45,7 +88,7 @@ async def process_campaign(c: dict) -> None:
     senders = await db.senders.find({"id": {"$in": c.get("sender_ids", [])}, "status": {"$in": ["active", "demo"]}}, {"_id": 0}).to_list(100)
     if not senders:
         return
-    capacity = {s["id"]: s["daily_limit"] - await sent_today(s["id"]) for s in senders}
+    capacity = {s["id"]: warmup_info(s)[0] - await sent_today(s["id"]) for s in senders}
     leads = await db.leads.find(
         {"campaign_id": c["id"], "status": {"$in": ["pending", "in_progress"]}, "next_send_at": {"$lte": n}},
         {"_id": 0},
@@ -65,16 +108,29 @@ async def process_campaign(c: dict) -> None:
                 continue  # assigned sender is out of quota today
             sender = max(avail, key=lambda s: capacity[s["id"]])
         sender = sender or max(avail, key=lambda s: capacity[s["id"]])
+        if await db.unsubscribes.find_one({"user_id": c["user_id"], "email": lead["email"]}):
+            await db.leads.update_one({"id": lead["id"]}, {"$set": {"status": "unsubscribed", "next_send_at": None}})
+            continue
         step = steps[idx]
+        # known CSV columns render empty (or their |fallback) for leads that lack a value
+        lead = {**lead, "custom": {**{f: "" for f in c.get("custom_fields") or []}, **(lead.get("custom") or {})}}
         first = await db.messages.find_one({"lead_id": lead["id"], "step_index": 0}, {"_id": 0})
-        subject = mailer.render_vars(step.get("subject") or "", lead)
+        variant = await pick_variant(c, idx, step)
+        mid = new_id()
+        unsub_url = f"{base_url()}/api/u/{mid}"
+        raw_subject = step.get("subject_b") if variant == "b" else step.get("subject")
+        subject = mailer.render_vars(raw_subject or "", lead)
         if not subject.strip():
             subject = "Re: " + (first["subject"] if first else "Quick question")
-        body = mailer.render_vars(step.get("body") or "", lead)
-        mid = new_id()
+        raw_body = step.get("body") or ""
+        body = mailer.render_vars(raw_body, lead, {"unsubscribe_link": unsub_url})
+        if c.get("include_unsubscribe", True) and "unsubscribe_link" not in raw_body:
+            body += UNSUB_FOOTER.format(url=unsub_url)
         html = mailer.build_html(body, mid, base_url(), c.get("track_opens", True), c.get("track_clicks", True))
         try:
-            header_id = await deliver(sender, lead["email"], subject, html, body, first["message_id_header"] if first else None)
+            header_id = await deliver(sender, lead["email"], subject, html, body,
+                                      first["message_id_header"] if first else None,
+                                      unsub_url if c.get("include_unsubscribe", True) else None)
         except Exception as e:  # noqa: BLE001
             err = str(e)[:300]
             log.warning("send failed %s -> %s: %s", sender["email"], lead["email"], err)
@@ -86,7 +142,7 @@ async def process_campaign(c: dict) -> None:
             continue
         await db.messages.insert_one({
             "id": mid, "user_id": c["user_id"], "campaign_id": c["id"], "lead_id": lead["id"],
-            "sender_id": sender["id"], "step_index": idx, "to_email": lead["email"], "subject": subject,
+            "sender_id": sender["id"], "step_index": idx, "variant": variant, "to_email": lead["email"], "subject": subject,
             "body": body, "message_id_header": header_id, "sent_at": now(), "opened_at": None,
             "open_count": 0, "clicked_at": None, "click_count": 0, "replied_at": None, "bounced": False,
         })

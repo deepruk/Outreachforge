@@ -50,7 +50,7 @@ export default function Analytics() {
         <StatCard testId="analytics-kpi-open-rate" label="Open rate" value={t ? pctFmt(t.open_rate) : "—"} icon={Eye} sub={`${v(t?.opened)} opens`} />
         <StatCard testId="analytics-kpi-click-rate" label="Click rate" value={t ? pctFmt(t.click_rate) : "—"} icon={MousePointerClick} accent="text-amber-300" sub={`${v(t?.clicked)} clicks`} />
         <StatCard testId="analytics-kpi-reply-rate" label="Reply rate" value={t ? pctFmt(t.reply_rate) : "—"} icon={MessageSquareReply} accent="text-emerald-300" sub={`${v(t?.replied)} replies`} />
-        <StatCard testId="analytics-kpi-bounce-rate" label="Bounce rate" value={t ? pctFmt(t.bounce_rate) : "—"} icon={ShieldAlert} accent="text-red-300" sub={`${v(t?.bounced)} bounced`} />
+        <StatCard testId="analytics-kpi-bounce-rate" label="Bounce rate" value={t ? pctFmt(t.bounce_rate) : "—"} icon={ShieldAlert} accent="text-red-300" sub={`${v(t?.bounced)} bounced · ${v(t?.unsubscribed)} unsub`} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-12">

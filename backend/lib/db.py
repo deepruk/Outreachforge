@@ -24,6 +24,7 @@ INDEXES: dict[str, list[IndexModel]] = {
     "leads": [IndexModel([("id", ASCENDING)], name="id", unique=True), IndexModel([("campaign_id", ASCENDING), ("status", ASCENDING), ("next_send_at", ASCENDING)], name="camp_status_next"), IndexModel([("user_id", ASCENDING), ("email", ASCENDING)], name="user_email")],
     "messages": [IndexModel([("id", ASCENDING)], name="id", unique=True), IndexModel([("campaign_id", ASCENDING), ("sent_at", DESCENDING)], name="camp_sent"), IndexModel([("user_id", ASCENDING), ("sent_at", DESCENDING)], name="user_sent"), IndexModel([("sender_id", ASCENDING), ("sent_at", DESCENDING)], name="sender_sent"), IndexModel([("lead_id", ASCENDING)], name="lead"), IndexModel([("message_id_header", ASCENDING)], name="msgid")],
     "threads": [IndexModel([("id", ASCENDING)], name="id", unique=True), IndexModel([("user_id", ASCENDING), ("last_at", DESCENDING)], name="user_last"), IndexModel([("lead_id", ASCENDING)], name="lead")],
+    "unsubscribes": [IndexModel([("user_id", ASCENDING), ("email", ASCENDING)], name="user_email", unique=True)],
     "thread_messages": [IndexModel([("thread_id", ASCENDING), ("at", ASCENDING)], name="thread_at"), IndexModel([("message_id", ASCENDING)], name="msgid")],
 }
 

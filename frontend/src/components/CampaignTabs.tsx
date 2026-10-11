@@ -42,7 +42,8 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-const ALIASES: Record<keyof LeadIn, string[]> = {
+type StdKey = Exclude<keyof LeadIn, "custom">;
+const ALIASES: Record<StdKey, string[]> = {
   email: ["email", "email address", "e-mail", "work email", "mail"],
   first_name: ["first_name", "first name", "firstname", "first", "name"],
   last_name: ["last_name", "last name", "lastname", "last", "surname"],
@@ -51,33 +52,39 @@ const ALIASES: Record<keyof LeadIn, string[]> = {
 };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function toLeads(text: string): { leads: LeadIn[]; invalid: number } {
+function toLeads(text: string): { leads: LeadIn[]; invalid: number; customCols: string[] } {
   const rows = parseCsv(text);
-  if (!rows.length) return { leads: [], invalid: 0 };
+  if (!rows.length) return { leads: [], invalid: 0, customCols: [] };
   const header = rows[0].map((h) => h.trim().toLowerCase());
   const idx = Object.fromEntries(
-    (Object.keys(ALIASES) as (keyof LeadIn)[]).map((k) => [k, header.findIndex((h) => ALIASES[k].includes(h))]),
-  ) as Record<keyof LeadIn, number>;
+    (Object.keys(ALIASES) as StdKey[]).map((k) => [k, header.findIndex((h) => ALIASES[k].includes(h))]),
+  ) as Record<StdKey, number>;
   let body = rows.slice(1);
   if (idx.email < 0) {
     // no header row — find the column that looks like an email
     const col = rows[0].findIndex((c) => EMAIL_RE.test(c.trim()));
-    if (col < 0) return { leads: [], invalid: rows.length };
+    if (col < 0) return { leads: [], invalid: rows.length, customCols: [] };
     idx.email = col;
     body = rows;
   }
+  const known = new Set(Object.values(idx).filter((i) => i >= 0));
+  const customCols = idx.email >= 0 && body !== rows
+    ? header.map((h, i) => ({ h: h.replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, ""), i })).filter((c) => c.h && !known.has(c.i))
+    : [];
   const leads: LeadIn[] = [];
   let invalid = 0;
   for (const r of body) {
-    const g = (k: keyof LeadIn) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
+    const g = (k: StdKey) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
     const email = g("email");
     if (!EMAIL_RE.test(email)) { invalid++; continue; }
     let first = g("first_name");
     let last = g("last_name");
     if (header[idx.first_name] === "name" && first.includes(" ") && !last) [first, last] = [first.split(" ")[0], first.split(" ").slice(1).join(" ")];
-    leads.push({ email, first_name: first, last_name: last, company: g("company"), title: g("title") });
+    const custom: Record<string, string> = {};
+    for (const c of customCols) if ((r[c.i] ?? "").trim()) custom[c.h] = r[c.i].trim();
+    leads.push({ email, first_name: first, last_name: last, company: g("company"), title: g("title"), custom });
   }
-  return { leads, invalid };
+  return { leads, invalid, customCols: customCols.map((c) => c.h) };
 }
 
 // ---------------- Leads tab ----------------
@@ -85,10 +92,10 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
-  const [preview, setPreview] = useState<{ leads: LeadIn[]; invalid: number; file: string } | null>(null);
+  const [preview, setPreview] = useState<{ leads: LeadIn[]; invalid: number; customCols: string[]; file: string } | null>(null);
   const [drag, setDrag] = useState(false);
   const [manual, setManual] = useState(false);
-  const [one, setOne] = useState<LeadIn>({ email: "", first_name: "", last_name: "", company: "", title: "" });
+  const [one, setOne] = useState<LeadIn>({ email: "", first_name: "", last_name: "", company: "", title: "", custom: {} });
   const fileRef = useRef<HTMLInputElement>(null);
   const leads = useQuery({
     queryKey: ["leads", campaign.id, q, status],
@@ -105,7 +112,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
       toast.success(`${r.added} leads added${r.skipped ? `, ${r.skipped} duplicates skipped` : ""}`);
       setPreview(null);
       setManual(false);
-      setOne({ email: "", first_name: "", last_name: "", company: "", title: "" });
+      setOne({ email: "", first_name: "", last_name: "", company: "", title: "", custom: {} });
       refresh();
     },
     onError: (e) => toast.error(errMsg(e)),
@@ -149,7 +156,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
         <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-[#1E293B]"><FileUp className="size-5 text-cyan" /></div>
         <div className="flex-1">
           <p className="font-medium text-slate-100">Import leads from CSV</p>
-          <p className="text-sm text-slate-400">Drag a file here. Columns: <span className="font-mono text-xs text-slate-300">email, first_name, last_name, company, title</span></p>
+          <p className="text-sm text-slate-400">Drag a file here. Columns: <span className="font-mono text-xs text-slate-300">email, first_name, last_name, company, title</span> — any extra column becomes a <span className="font-mono text-xs text-cyan">{"{{variable}}"}</span></p>
         </div>
         <input ref={fileRef} type="file" accept=".csv,text/csv,.txt" className="hidden" onChange={onFile} data-testid="csv-file-input" />
         <div className="flex gap-2">
@@ -199,7 +206,14 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
                     <p className="font-medium text-slate-100">{`${l.first_name} ${l.last_name}`.trim() || "—"}</p>
                     <p className="font-mono text-xs text-slate-500">{l.email}</p>
                   </td>
-                  <td className="px-3 py-2.5 text-slate-300">{l.company || "—"}<p className="text-xs text-slate-500">{l.title}</p></td>
+                  <td className="px-3 py-2.5 text-slate-300">
+                    {l.company || "—"}<p className="text-xs text-slate-500">{l.title}</p>
+                    {Object.keys(l.custom ?? {}).length > 0 && (
+                      <p className="mt-0.5 max-w-[220px] truncate font-mono text-[10px] text-slate-500" data-testid={`lead-custom-${l.id}`}>
+                        {Object.entries(l.custom).map(([k, v]) => `${k}: ${v}`).join(" · ")}
+                      </p>
+                    )}
+                  </td>
                   <td className="px-3 py-2.5"><Pill cls={LEAD_STATUS[l.status].cls}>{LEAD_STATUS[l.status].label}</Pill></td>
                   <td className="px-3 py-2.5 font-mono text-xs text-slate-400">{Math.min(l.current_step, campaign.steps.length)}/{campaign.steps.length}</td>
                   <td className="px-3 py-2.5">
@@ -230,24 +244,31 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
           <DialogHeader>
             <DialogTitle>Import {preview?.leads.length} leads</DialogTitle>
             <DialogDescription>
-              From <span className="font-mono">{preview?.file}</span>{preview?.invalid ? ` · ${preview.invalid} rows skipped (invalid email)` : ""}. Duplicates in this campaign are skipped automatically.
+              From <span className="font-mono">{preview?.file}</span>{preview?.invalid ? ` · ${preview.invalid} rows skipped (invalid email)` : ""}. Duplicates and unsubscribed contacts are handled automatically.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-72 overflow-auto rounded-lg border border-[#1E293B] scroll-thin">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-[#161F30] text-left text-slate-400">
-                <tr>{["Email", "First", "Last", "Company", "Title"].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}</tr>
+                <tr>{["Email", "First", "Last", "Company", "Title", ...(preview?.customCols ?? [])].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}</tr>
               </thead>
               <tbody>
                 {preview?.leads.slice(0, 50).map((l, i) => (
                   <tr key={i} className="border-t border-[#1E293B]">
                     <td className="px-3 py-1.5 font-mono">{l.email}</td><td className="px-3 py-1.5">{l.first_name}</td>
                     <td className="px-3 py-1.5">{l.last_name}</td><td className="px-3 py-1.5">{l.company}</td><td className="px-3 py-1.5">{l.title}</td>
+                    {preview.customCols.map((c) => <td key={c} className="px-3 py-1.5">{l.custom[c] ?? ""}</td>)}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {!!preview?.customCols.length && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400" data-testid="csv-custom-columns">
+              Custom variables detected:
+              {preview.customCols.map((c) => <span key={c} className="rounded-md border border-[#263247] bg-[#161F30] px-1.5 py-0.5 font-mono text-cyan">{`{{${c}}}`}</span>)}
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setPreview(null)} data-testid="csv-preview-cancel">Cancel</Button>
             <Button onClick={() => preview && imp.mutate(preview.leads)} disabled={imp.isPending} data-testid="csv-import-confirm">
@@ -279,16 +300,27 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
 }
 
 // ---------------- Sequence tab ----------------
-const VARS = ["first_name", "last_name", "company", "title"];
-const SAMPLE = { first_name: "Olivia", last_name: "Carter", company: "Northwind", title: "VP Sales", email: "olivia@northwind.com" };
-const render = (t: string) => t.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (m, k: string) => (SAMPLE as Record<string, string>)[k.toLowerCase()] ?? m);
+const BASE_VARS = ["first_name", "last_name", "company", "title"];
+const SAMPLE: Record<string, string> = { first_name: "Olivia", last_name: "Carter", company: "Northwind", title: "VP Sales", email: "olivia@northwind.com", unsubscribe_link: "https://…/unsubscribe" };
+const makeRender = (custom: string[]) => (t: string) =>
+  t.replace(/\{\{\s*([a-z0-9_]+)\s*(?:\|([^}]*))?\}\}/gi, (m, k: string, fb?: string) => {
+    const key = k.toLowerCase();
+    if (SAMPLE[key]) return SAMPLE[key];
+    if (custom.includes(key)) return `[${key}]`;
+    return fb !== undefined ? fb.trim() : m;
+  });
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 export function SequenceTab({ campaign }: { campaign: Campaign }) {
   const qc = useQueryClient();
   const [steps, setSteps] = useState<Step[]>(campaign.steps);
   const [active, setActive] = useState(0);
+  const [abOpen, setAbOpen] = useState<Record<string, boolean>>({});
+  const [previewB, setPreviewB] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const lastSel = useRef<number | null>(null);
+  const vars = [...BASE_VARS, ...campaign.custom_fields, "unsubscribe_link"];
+  const render = makeRender(campaign.custom_fields);
   const dirty = JSON.stringify(steps) !== JSON.stringify(campaign.steps);
   const save = useMutation({
     mutationFn: () => apiPut<Campaign>(`/campaigns/${campaign.id}`, { steps }),
@@ -306,13 +338,14 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
     const el = bodyRef.current;
     const token = `{{${v}}}`;
     if (!el || !cur) return;
-    const a = el.selectionStart ?? cur.body.length;
-    const b = el.selectionEnd ?? a;
+    const focused = document.activeElement === el || lastSel.current !== null;
+    const a = focused ? (lastSel.current ?? el.selectionStart) : cur.body.length;
+    const b = focused && lastSel.current === null ? el.selectionEnd : a;
     patch({ body: cur.body.slice(0, a) + token + cur.body.slice(b) });
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a + token.length, a + token.length); });
   };
   const add = () => {
-    setSteps([...steps, { id: `new-${uid()}`, subject: "", body: "Hi {{first_name}},\n\n", delay_days: 3 }]);
+    setSteps([...steps, { id: `new-${uid()}`, subject: "", subject_b: "", ab_winner: null, body: "Hi {{first_name}},\n\n", delay_days: 3 }]);
     setActive(steps.length);
   };
   const remove = (i: number) => {
@@ -342,7 +375,10 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
               data-testid={`sequence-step-${i}`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[11px] uppercase tracking-wider text-cyan">Step {i + 1}</span>
+                <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-cyan">
+                  Step {i + 1}
+                  {s.subject_b.trim() && <span className="rounded bg-amber-500/15 px-1.5 py-px text-[10px] text-amber-300" data-testid={`sequence-step-ab-badge-${i}`}>A/B{s.ab_winner ? ` · ${s.ab_winner.toUpperCase()} won` : ""}</span>}
+                </span>
                 {steps.length > 1 && (
                   <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); remove(i); }} className="rounded p-1 text-slate-500 hover:bg-white/5 hover:text-red-300" data-testid={`sequence-step-delete-${i}`}>
                     <Trash2 className="size-3.5" />
@@ -377,32 +413,67 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
                 </div>
               )}
               <div className="space-y-1.5">
-                <Label>Subject</Label>
+                <div className="flex items-center justify-between">
+                  <Label>{cur.subject_b || abOpen[cur.id] ? "Subject A" : "Subject"}</Label>
+                  {!cur.subject_b && !abOpen[cur.id] && (
+                    <button type="button" onClick={() => setAbOpen({ ...abOpen, [cur.id]: true })} className="text-xs font-medium text-amber-300 hover:underline" data-testid="step-add-ab-button">
+                      + A/B test subject
+                    </button>
+                  )}
+                </div>
                 <Input value={cur.subject} onChange={(e) => patch({ subject: e.target.value })} placeholder={active > 0 ? "Leave empty to reply in the same thread" : "Subject line"} data-testid="step-subject-input" />
               </div>
+              {(cur.subject_b || abOpen[cur.id]) && (
+                <div className="space-y-1.5 rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-3" data-testid="step-ab-panel">
+                  <div className="flex items-center justify-between">
+                    <Label>Subject B</Label>
+                    <button type="button" onClick={() => { patch({ subject_b: "", ab_winner: null }); setAbOpen({ ...abOpen, [cur.id]: false }); }} className="text-xs text-slate-500 hover:text-red-300" data-testid="step-remove-ab-button">Remove test</button>
+                  </div>
+                  <Input value={cur.subject_b} onChange={(e) => patch({ subject_b: e.target.value })} placeholder="Alternative subject line" data-testid="step-subject-b-input" />
+                  <p className="text-xs text-slate-400">
+                    {cur.ab_winner
+                      ? <span className="text-emerald-300" data-testid="step-ab-winner">Subject {cur.ab_winner.toUpperCase()} won on open rate — now sent to everyone. Edit a subject to restart the test.</span>
+                      : "Leads are split 50/50. After each version reaches 20 sends, the one with the higher open rate is sent to everyone else."}
+                  </p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Label>Body</Label>
                   <div className="flex flex-wrap gap-1">
-                    {VARS.map((v) => (
+                    {vars.map((v) => (
                       <button key={v} type="button" onClick={() => insertVar(v)} className="rounded-md border border-[#263247] bg-[#161F30] px-2 py-0.5 font-mono text-[11px] text-cyan transition-colors hover:border-cyan-500/50" data-testid={`insert-var-${v}`}>
                         {`{{${v}}}`}
                       </button>
                     ))}
                   </div>
                 </div>
-                <Textarea ref={bodyRef} value={cur.body} onChange={(e) => patch({ body: e.target.value })} rows={11} className="font-mono text-[13px] leading-relaxed" data-testid="step-body-input" />
-                <p className="text-xs text-slate-500">Plain text. Links are tracked automatically when click tracking is on.</p>
+                <Textarea ref={bodyRef} value={cur.body} onChange={(e) => patch({ body: e.target.value })} onBlur={(e) => { lastSel.current = e.currentTarget.selectionStart; }} rows={11} className="font-mono text-[13px] leading-relaxed" data-testid="step-body-input" />
+                <p className="text-xs text-slate-500">Plain text. Use <span className="font-mono">{"{{field|fallback}}"}</span> for a default when a lead's value is empty. Links are tracked when click tracking is on.</p>
               </div>
             </div>
           </Panel>
         )}
         {cur && (
-          <Panel title="Preview" testId="sequence-preview">
+          <Panel
+            title="Preview"
+            action={cur.subject_b.trim() ? (
+              <div className="flex gap-1 rounded-md border border-[#1E293B] p-0.5">
+                {[false, true].map((b) => (
+                  <button key={String(b)} type="button" onClick={() => setPreviewB(b)} data-testid={`preview-variant-${b ? "b" : "a"}`}
+                    className={cn("rounded px-2 py-0.5 text-xs", previewB === b ? "bg-[#1E293B] text-white" : "text-slate-500")}>{b ? "B" : "A"}</button>
+                ))}
+              </div>
+            ) : undefined}
+            testId="sequence-preview"
+          >
             <div className="p-5 text-sm">
               <p className="text-xs text-slate-500">To: <span className="font-mono text-slate-300">{SAMPLE.email}</span></p>
-              <p className="mt-1 font-medium text-white">{render(cur.subject) || `Re: ${render(firstSubject)}`}</p>
-              <div className="mt-4 whitespace-pre-wrap rounded-lg border border-[#1E293B] bg-[#0B0F17] p-4 leading-relaxed text-slate-300">{render(cur.body)}</div>
+              <p className="mt-1 font-medium text-white" data-testid="preview-subject">{render(previewB && cur.subject_b.trim() ? cur.subject_b : cur.subject) || `Re: ${render(firstSubject)}`}</p>
+              <div className="mt-4 whitespace-pre-wrap rounded-lg border border-[#1E293B] bg-[#0B0F17] p-4 leading-relaxed text-slate-300" data-testid="preview-body">
+                {render(cur.body)}
+                {campaign.include_unsubscribe && !cur.body.includes("unsubscribe_link") && <span className="text-slate-500">{"\n\n--\nNot interested? Unsubscribe here: https://…/unsubscribe"}</span>}
+              </div>
             </div>
           </Panel>
         )}
@@ -420,6 +491,7 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
   const [s, setS] = useState({
     name: campaign.name, sender_ids: campaign.sender_ids, daily_limit: campaign.daily_limit,
     track_opens: campaign.track_opens, track_clicks: campaign.track_clicks, stop_on_reply: campaign.stop_on_reply,
+    include_unsubscribe: campaign.include_unsubscribe,
     send_start_hour: campaign.send_start_hour, send_end_hour: campaign.send_end_hour,
   });
   const save = useMutation({
@@ -485,6 +557,7 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
               ["track_opens", "Track opens", "Adds an invisible 1px image to each email"],
               ["track_clicks", "Track clicks", "Rewrites links through a redirect"],
               ["stop_on_reply", "Stop on reply", "Halt the sequence when a lead replies"],
+              ["include_unsubscribe", "Unsubscribe link", "Append a one-click opt-out link + List-Unsubscribe header"],
             ] as const).map(([k, l, d]) => (
               <label key={k} className="flex cursor-pointer items-center justify-between gap-4 px-5 py-3.5">
                 <div><p className="text-sm font-medium text-slate-100">{l}</p><p className="text-xs text-slate-500">{d}</p></div>

@@ -25,7 +25,7 @@ function Overview({ campaign }: { campaign: Campaign }) {
         <StatCard testId="campaign-kpi-open-rate" label="Open rate" value={pctFmt(t.open_rate)} sub={`${t.opened} opened`} icon={Eye} />
         <StatCard testId="campaign-kpi-click-rate" label="Click rate" value={pctFmt(t.click_rate)} sub={`${t.clicked} clicked`} icon={MousePointerClick} accent="text-amber-300" />
         <StatCard testId="campaign-kpi-reply-rate" label="Reply rate" value={pctFmt(t.reply_rate)} sub={`${t.replied} replied`} icon={MessageSquareReply} accent="text-emerald-300" />
-        <StatCard testId="campaign-kpi-bounce-rate" label="Bounce rate" value={pctFmt(t.bounce_rate)} sub={`${t.bounced} bounced`} icon={ShieldAlert} accent="text-red-300" />
+        <StatCard testId="campaign-kpi-bounce-rate" label="Bounce rate" value={pctFmt(t.bounce_rate)} sub={`${t.bounced} bounced · ${t.unsubscribed} unsub`} icon={ShieldAlert} accent="text-red-300" />
       </div>
       <Panel title="Daily activity" action={<SeriesToggles visible={visible} onChange={setVisible} />} testId="campaign-chart-panel">
         <div className="p-4">{a.data ? <PerformanceChart data={a.data.series} visible={visible} height={260} /> : <div className="h-[260px] animate-pulse rounded-lg bg-[#161F30]" />}</div>
@@ -45,6 +45,23 @@ function Overview({ campaign }: { campaign: Campaign }) {
                   <RateBar value={p} color={c} />
                 </div>
               ))}
+              {s.variants.length > 0 && (
+                <div className="col-span-2 grid gap-2 md:col-span-12 md:grid-cols-2" data-testid={`step-ab-results-${s.step}`}>
+                  {s.variants.map((v) => {
+                    const win = s.ab_winner === v.variant;
+                    return (
+                      <div key={v.variant} className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${win ? "border-emerald-500/40 bg-emerald-500/[0.06]" : "border-[#1E293B] bg-[#0B0F17]"}`} data-testid={`step-${s.step}-variant-${v.variant}`}>
+                        <span className={`grid size-6 shrink-0 place-items-center rounded font-mono text-xs font-bold ${win ? "bg-emerald-500 text-[#0B0F17]" : "bg-[#1E293B] text-slate-300"}`}>{v.variant.toUpperCase()}</span>
+                        <p className="min-w-0 flex-1 truncate text-xs text-slate-300">{v.subject}</p>
+                        <span className="font-mono text-xs text-slate-400">{v.sent} sent</span>
+                        <span className="font-mono text-xs text-sky-300">{pctFmt(v.open_rate)} open</span>
+                        {win && <span className="text-[10px] font-semibold uppercase text-emerald-300">Winner</span>}
+                      </div>
+                    );
+                  })}
+                  {!s.ab_winner && <p className="text-[11px] text-slate-500 md:col-span-2">A/B test running — a winner is chosen automatically after 20 sends per version.</p>}
+                </div>
+              )}
             </div>
           ))}
         </div>
