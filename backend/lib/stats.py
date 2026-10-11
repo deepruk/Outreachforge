@@ -80,6 +80,6 @@ def variant_stats(ms: list[dict], st: dict) -> list[dict]:
     out = []
     for v, subj in (("a", st.get("subject") or ""), ("b", st.get("subject_b") or "")):
         vm = [m for m in ms if (m.get("variant") or "a") == v]
-        opened = sum(1 for m in vm if m.get("opened_at"))
+        opened = sum(1 for m in vm if m.get("opened_at") or (m.get("open_count") or 0) > 0)
         out.append({"variant": v, "subject": subj, "sent": len(vm), "opened": opened, "open_rate": pct(opened, len(vm))})
     return out
