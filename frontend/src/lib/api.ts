@@ -1,6 +1,6 @@
 // Typed fetch layer over the FastAPI backend. Base is the relative "/api" prefix so the
 // same code works in dev (Vite proxies /api → :8001) and behind a single origin in prod.
-export const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\\/+$/, "");
+export const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 const BASE = `${API_BASE}/api`;
 
 // Fields are declared, not constructor parameter properties: tsconfig sets
