@@ -1,12 +1,8 @@
-// Typed fetch layer for the FastAPI backend.
-// Production frontend and backend are separate Render services. Set VITE_API_URL
-// to the backend origin at build time. In local development, keep it unset so
-// Vite can proxy relative /api requests to the local backend.
-export const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
-const BASE = `${API_BASE}/api`;
+// Typed fetch layer over the FastAPI backend. Keep requests same-origin for now:
+// this preserves the currently working login/session behavior while production
+// API routing is corrected at the hosting layer.
+const BASE = "/api";
 
-// Fields are declared, not constructor parameter properties: tsconfig sets
-// erasableSyntaxOnly, which rejects `constructor(readonly status: number)`.
 export class ApiError extends Error {
   status: number;
   body: unknown;
@@ -22,11 +18,8 @@ export class ApiError extends Error {
 type JsonBody = unknown;
 
 async function request<T>(method: string, path: string, body?: JsonBody): Promise<T> {
-  // The backend owns the httpOnly session cookie. Include it on API calls to
-  // the separate backend origin; the Render subdomains are same-site.
   const res = await fetch(`${BASE}${path}`, {
     method,
-    credentials: "include",
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -37,10 +30,6 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
   }
 
   if (res.status === 204) return undefined as T;
-  const contentType = res.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    throw new ApiError(res.status, { detail: "API returned a non-JSON response. Check VITE_API_URL and backend routing." });
-  }
   return (await res.json()) as T;
 }
 
