@@ -6,6 +6,8 @@ import imaplib
 import re
 import smtplib
 import ssl
+
+from lib import google_gmail
 from email.header import decode_header, make_header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -102,6 +104,8 @@ def send_email(sender: dict, to: str, subject: str, html_body: str, text_body: s
         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
+    if sender.get("auth_type") == "google_oauth":
+        return google_gmail.send_message(sender, msg)
     s = _smtp(sender)
     try:
         s.sendmail(sender["email"], [to], msg.as_string())
@@ -114,6 +118,12 @@ def send_email(sender: dict, to: str, subject: str, html_body: str, text_body: s
 
 
 def test_connection(cfg: dict) -> dict:
+    if cfg.get("auth_type") == "google_oauth":
+        try:
+            return google_gmail.test_connection(cfg)
+        except Exception as e:
+            message = str(e)[:300]
+            return {"smtp_ok": False, "smtp_error": message, "imap_ok": False, "imap_error": message}
     res = {"smtp_ok": False, "smtp_error": "", "imap_ok": False, "imap_error": ""}
     try:
         s = _smtp(cfg)
@@ -173,6 +183,8 @@ def strip_quoted(text: str) -> str:
 
 def fetch_new(sender: dict, last_uid: int) -> tuple[list[dict], int]:
     """Fetch messages with UID > last_uid (or last 7 days on first sync). Returns (messages, max_uid)."""
+    if sender.get("auth_type") == "google_oauth":
+        return google_gmail.fetch_new(sender, last_uid)
     m = imaplib.IMAP4_SSL(sender["imap_host"], int(sender.get("imap_port") or 993), timeout=TIMEOUT)
     out: list[dict] = []
     max_uid = last_uid
