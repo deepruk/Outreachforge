@@ -57,18 +57,21 @@ def spin(text: str, rnd: "random.Random | None" = None) -> str:
 
 
 def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_clicks: bool) -> str:
-    escaped = html.escape(body)
+    """Build HTML while preserving safe text escaping and stable per-message tracking IDs."""
+    normalized = (body or "").replace("\\r\\n", "\\n").replace("\\r", "\\n")
+    escaped = html.escape(normalized)
 
     def link(m: re.Match) -> str:
         url = html.unescape(m.group(1))
-        tracked = track_clicks and "/api/u/" not in url  # never wrap the unsubscribe link
+        tracked = track_clicks and "/api/u/" not in url
         href = f"{base_url}/api/t/c/{msg_id}?u={quote(url, safe='')}" if tracked else url
-        return f'<a href="{html.escape(href)}">{html.escape(url)}</a>'
+        return f'<a href="{html.escape(href, quote=True)}">{html.escape(url)}</a>'
 
     escaped = URL_RE.sub(link, escaped)
-    out = "<div style=\"font-family:Arial,sans-serif;font-size:14px;line-height:1.5\">" + escaped.replace("\n", "<br>") + "</div>"
+    out = "<div style=\"font-family:Arial,sans-serif;font-size:14px;line-height:1.5\">" + escaped.replace("\\n", "<br>\\n") + "</div>"
     if track_opens:
-        out += f'<img src="{base_url}/api/t/o/{msg_id}.gif" width="1" height="1" alt="" style="display:none">'
+        pixel_url = f"{base_url}/api/t/o/{msg_id}.gif"
+        out += f'<img src="{html.escape(pixel_url, quote=True)}" width="1" height="1" alt="" style="display:none">'
     return out
 
 
