@@ -79,6 +79,8 @@ async def track_click(mid: str, u: str = ""):
     url = unquote(u)
     if not url.startswith(("http://", "https://")):
         return RedirectResponse("https://www.google.com", status_code=302)
+    if len(url) > 4096:
+        return RedirectResponse("https://www.google.com", status_code=302)
     m = await db.messages.find_one(
         {"id": mid}, {"_id": 0, "lead_id": 1, "campaign_id": 1}
     )
