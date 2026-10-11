@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json.schemastore.org/design-tokens",
+  "app_name": "OutreachForge",
+  "app_tagline": "The Sovereign Cold Outreach Engine & Deliverability Infrastructure",
+  "archetype": "SWISS_AND_HIGH_CONTRAST_PERFORMANCE",
+  "theme_mode": "dark_default_with_light_support",
+  "colors": {
+    "surfaces": [
+      {
+        "name": "page",
+        "kind": "solid",
+        "bg": "#0B0F17",
+        "on_bg": "#F8FAFC",
+        "on_bg_muted": "#94A3B8",
+        "roles": {
+          "border": "#1E293B",
+          "link": "#38BDF8",
+          "error": "#F87171",
+          "success": "#34D399",
+          "warning": "#FBBF24"
+        }
+      },
+      {
+        "name": "panel",
+        "kind": "solid",
+        "bg": "#111827",
+        "on_bg": "#F9FAFB",
+        "on_bg_muted": "#9CA3AF",
+        "roles": {
+          "border": "#1F2937",
+          "badge_bg": "#1E293B",
+          "badge_text": "#E2E8F0"
+        }
+      },
+      {
+        "name": "sidebar",
+        "kind": "solid",
+        "bg": "#090D14",
+        "on_bg": "#F1F5F9",
+        "on_bg_muted": "#64748B",
+        "roles": {
+          "active_bg": "#1E293B",
+          "active_text": "#38BDF8",
+          "border": "#1E293B"
+        }
+      },
+      {
+        "name": "card_subtle",
+        "kind": "solid",
+        "bg": "#161F30",
+        "on_bg": "#FFFFFF",
+        "on_bg_muted": "#94A3B8"
+      },
+      {
+        "name": "inverse",
+        "kind": "solid",
+        "bg": "#F8FAFC",
+        "on_bg": "#0B0F17",
+        "on_bg_muted": "#475569"
+      },
+      {
+        "name": "hero",
+        "kind": "gradient",
+        "contrast_against": "#0B0F17",
+        "guarantee": "solid dark background with radial blue-indigo specular highlight and 50% opacity subtle dot matrix grid",
+        "on_bg": "#FFFFFF",
+        "on_bg_muted": "#94A3B8",
+        "roles": {
+          "link": "#38BDF8",
+          "error": "#F87171",
+          "success": "#34D399"
+        }
+      },
+      {
+        "name": "badge_interested",
+        "kind": "solid",
+        "bg": "#064E3B",
+        "on_bg": "#A7F3D0",
+        "on_bg_muted": "#6EE7B7"
+      },
+      {
+        "name": "badge_meeting_booked",
+        "kind": "solid",
+        "bg": "#1E1B4B",
+        "on_bg": "#C7D2FE",
+        "on_bg_muted": "#818CF8"
+      },
+      {
+        "name": "badge_not_interested",
+        "kind": "solid",
+        "bg": "#450A0A",
+        "on_bg": "#FECACA",
+        "on_bg_muted": "#F87171"
+      },
+      {
+        "name": "badge_ooo",
+        "kind": "solid",
+        "bg": "#451A03",
+        "on_bg": "#FED7AA",
+        "on_bg_muted": "#FB923C"
+      }
+    ],
+    "accent": "#2563EB",
+    "accent_hover": "#1D4ED8",
+    "on_accent": "#FFFFFF",
+    "highlight_cyan": "#06B6D4",
+    "highlight_emerald": "#10B981"
+  },
+  "typography": {
+    "font_heading": "'Plus Jakarta Sans Variable', sans-serif",
+    "font_body": "'Inter Variable', sans-serif",
+    "font_mono": "'JetBrains Mono Variable', monospace",
+    "font_import_statements": [
+      "@import \"@fontsource-variable/plus-jakarta-sans\";",
+      "@import \"@fontsource-variable/inter\";",
+      "@import \"@fontsource-variable/jetbrains-mono\";"
+    ],
+    "scale_px": {
+      "display": 56,
+      "h1": 42,
+      "h2": 32,
+      "h3": 22,
+      "h4": 18,
+      "body": 15,
+      "caption": 13
+    },
+    "letter_spacing": {
+      "headings": "-0.03em",
+      "labels": "0.06em",
+      "body": "-0.01em"
+    }
+  },
+  "entry_surfaces": {
+    "/": "split hero — brand positioning + live sending simulator left, interactive deliverability & campaign preview matrix right",
+    "/login": "branded split auth — value pillar panel with deliverability stats left, credential login form right",
+    "/signup": "branded split auth — quick onboarding banner left, account setup + initial sender setup wizard right",
+    "/dashboard": "high-density 4-metric KPI ribbon top, 14-day outreach volume/open/reply trend chart center, recent high-intent inbox replies right",
+    "/campaigns": "tactical campaign fleet table with real-time launch status, progress bars, open/click/reply metrics, and one-click launch drawer",
+    "/campaigns/:id": "multi-tab operational command: Overview analytics, Leads table with CSV upload parser, Multi-step Sequence Builder with variable insertion, and Sender Rotation & Schedule settings",
+    "/inbox": "3-pane Master Unibox: categorized intent folders left (All, Interested, Meeting Booked, Not Interested, OOO), message thread stream middle, conversational thread viewer with quick reply composer right",
+    "/senders": "connected sender inboxes matrix with health gauges, daily quota dials, SMTP/IMAP testing modal, and warm-up ramp tracker",
+    "/analytics": "comprehensive performance analytics with date-range filters, step-by-step conversion funnel, and per-campaign comparative ROI matrix"
+  },
+  "image_urls": {
+    "founder_testimonials": [
+      {
+        "url": "https://images.unsplash.com/photo-1534399315465-2b91232de345?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHx0ZWNobm9sb2d5JTIwZm91bmRlciUyMHBvcnRyYWl0fGVufDB8fHx8MTc5MTczOTg5MXww&ixlib=rb-4.1.0&q=85",
+        "description": "Arjun Mehta, Founder at Scalr B2B (used in testimonial cards on landing page)"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1622124549569-734d5a66859d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwzfHx0ZWNobm9sb2d5JTIwZm91bmRlciUyMHBvcnRyYWl0fGVufDB8fHx8MTc5MTczOTg5MXww&ixlib=rb-4.1.0&q=85",
+        "description": "Vikram Patel, VP of Growth at HyperSend (used in social proof strip)"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1607990281513-2c110a25bd8c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHx0ZWNobm9sb2d5JTIwZm91bmRlciUyMHBvcnRyYWl0fGVufDB8fHx8MTc5MTczOTg5MXww&ixlib=rb-4.1.0&q=85",
+        "description": "Marcus Vance, Outbound Agency Principal (used in agency scale section)"
+      }
+    ],
+    "workspace_context": [
+      {
+        "url": "https://images.unsplash.com/photo-1556761175-4b46a572b786?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBtb2Rlcm4lMjBvZmZpY2UlMjB3b3Jrc3BhY2UlMjB0ZWFtfGVufDB8fHx8MTc5MTczOTg5MXww&ixlib=rb-4.1.0&q=85",
+        "description": "High performance sales team operating automated outreach infrastructure"
+      }
+    ]
+  },
+  "layout_and_grids": {
+    "app_shell": "Two-level layout: persistent sleek sidebar navigation (w-64 on desktop, collapsible to w-18 icon mode or mobile sheet) + top utility bar (workspace selector, notifications, demo seed reset, quick action 'New Campaign') + scrollable viewport area (px-6 py-6 max-w-7xl mx-auto).",
+    "dashboard_grid": "Top grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 for metrics; Middle grid-cols-1 lg:grid-cols-12 gap-6 where 8 cols host Recharts outreach performance and 4 cols host the real-time Master Inbox reply stream; Bottom grid-cols-1 lg:grid-cols-12 gap-6 for Active Campaigns roster and Sender Health breakdown.",
+    "master_inbox_grid": "3-column fixed layout: Left 240px folder/sentiment filter list; Middle 360px thread snippet feed with unread indicators and badge chips; Right flex-1 deep message conversation pane with contact metadata sidebar and inline rich reply composer.",
+    "campaign_detail_tabs": "Tabs: 1. Overview (charts, open/click funnels, quick stats), 2. Leads (CSV drag-and-drop importer, search/filter, lead status tags), 3. Sequence (step-by-step email builder with delay timers, variable pills {first_name}, {company}, {title}, A/Z fallback preview), 4. Settings (Sender mailbox pool rotation, daily send pacing, tracking toggles)."
+  },
+  "motion": {
+    "engine": "tw-animate-css and Tailwind transition utilities",
+    "rules": [
+      "Use specific transitions: 'transition-colors duration-150', 'transition-transform duration-200 ease-out'",
+      "Hover lift on interactive cards: 'hover:-translate-y-0.5 hover:shadow-lg hover:border-slate-700'",
+      "Tab transitions: quick cross-fade with 'animate-fadeIn duration-200'",
+      "Badge pulsing on 'Active' campaign runs: subtle emerald status indicator 'animate-pulse'",
+      "Honor prefers-reduced-motion: disable translate effects with motion-reduce:transform-none"
+    ]
+  },
+  "accessibility": {
+    "contrast_standard": "All text tokens exceed WCAG AA 4.5:1 against dark base backgrounds #0B0F17, #111827 and #161F30",
+    "test_attributes": "All buttons, inputs, links, tabs, dialog triggers, and metrics MUST feature data-testid attributes (e.g., data-testid='create-campaign-button', data-testid='sender-test-connection-button', data-testid='csv-file-input', data-testid='kpi-open-rate')",
+    "keyboard_nav": "Full dialogs, popovers, and selects use @base-ui primitives which handle focus traps and escape key dismissal natively"
+  },
+  "instructions_to_main_agent": [
+    "1. Replace index.css theme fonts and colors with Plus Jakarta Sans (headings) + Inter (body) + JetBrains Mono (monospaced metrics/code/tokens).",
+    "2. Build the complete suite of cold outreach SaaS pages in frontend/src/pages: Landing (Home.tsx), Login (Login.tsx), Signup (Signup.tsx), Dashboard (Dashboard.tsx), Campaigns (Campaigns.tsx), CampaignDetail (CampaignDetail.tsx), MasterInbox (MasterInbox.tsx), SenderAccounts (SenderAccounts.tsx), Analytics (Analytics.tsx).",
+    "3. Add all routes cleanly in frontend/src/App.tsx with persistent navigation when inside the authenticated app shell.",
+    "4. Ensure realistic seed data and robust mock/fallback data so all tables, charts, sequences, inbox threads, and sender accounts render rich, actionable UI even when static or offline.",
+    "5. Include interactive workflows: Add Sender Account modal with SMTP/IMAP testing simulation, CSV lead import parser with table preview, Email Sequence step adder with {first_name} badge inserters, Campaign status toggle (Active/Paused), Master Inbox reply sender with instant thread update, and 14-day Recharts charts with open/click/reply toggles."
+  ]
+}

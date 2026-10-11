@@ -1,0 +1,502 @@
+import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Clock, FileUp, Loader2, Plus, Save, Search, Trash2, Upload, UserPlus } from "lucide-react";
+import { toast } from "sonner";
+import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
+import type { Campaign, Lead, LeadImportResult, LeadIn, Sender, Step } from "@/lib/types";
+import { LEAD_STATUS, errMsg, timeAgo } from "@/lib/format";
+import { Panel, Pill } from "@/components/ui-kit";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+
+// ---------------- CSV ----------------
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') inQ = false;
+      else cell += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === "," || ch === ";" || ch === "\t") { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell); cell = "";
+      if (row.some((c) => c.trim())) rows.push(row);
+      row = [];
+    } else cell += ch;
+  }
+  row.push(cell);
+  if (row.some((c) => c.trim())) rows.push(row);
+  return rows;
+}
+
+const ALIASES: Record<keyof LeadIn, string[]> = {
+  email: ["email", "email address", "e-mail", "work email", "mail"],
+  first_name: ["first_name", "first name", "firstname", "first", "name"],
+  last_name: ["last_name", "last name", "lastname", "last", "surname"],
+  company: ["company", "company name", "company_name", "organization", "organisation", "account"],
+  title: ["title", "job title", "job_title", "position", "role"],
+};
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function toLeads(text: string): { leads: LeadIn[]; invalid: number } {
+  const rows = parseCsv(text);
+  if (!rows.length) return { leads: [], invalid: 0 };
+  const header = rows[0].map((h) => h.trim().toLowerCase());
+  const idx = Object.fromEntries(
+    (Object.keys(ALIASES) as (keyof LeadIn)[]).map((k) => [k, header.findIndex((h) => ALIASES[k].includes(h))]),
+  ) as Record<keyof LeadIn, number>;
+  let body = rows.slice(1);
+  if (idx.email < 0) {
+    // no header row — find the column that looks like an email
+    const col = rows[0].findIndex((c) => EMAIL_RE.test(c.trim()));
+    if (col < 0) return { leads: [], invalid: rows.length };
+    idx.email = col;
+    body = rows;
+  }
+  const leads: LeadIn[] = [];
+  let invalid = 0;
+  for (const r of body) {
+    const g = (k: keyof LeadIn) => (idx[k] >= 0 ? (r[idx[k]] ?? "").trim() : "");
+    const email = g("email");
+    if (!EMAIL_RE.test(email)) { invalid++; continue; }
+    let first = g("first_name");
+    let last = g("last_name");
+    if (header[idx.first_name] === "name" && first.includes(" ") && !last) [first, last] = [first.split(" ")[0], first.split(" ").slice(1).join(" ")];
+    leads.push({ email, first_name: first, last_name: last, company: g("company"), title: g("title") });
+  }
+  return { leads, invalid };
+}
+
+// ---------------- Leads tab ----------------
+export function LeadsTab({ campaign }: { campaign: Campaign }) {
+  const qc = useQueryClient();
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("all");
+  const [preview, setPreview] = useState<{ leads: LeadIn[]; invalid: number; file: string } | null>(null);
+  const [drag, setDrag] = useState(false);
+  const [manual, setManual] = useState(false);
+  const [one, setOne] = useState<LeadIn>({ email: "", first_name: "", last_name: "", company: "", title: "" });
+  const fileRef = useRef<HTMLInputElement>(null);
+  const leads = useQuery({
+    queryKey: ["leads", campaign.id, q, status],
+    queryFn: () => apiGet<Lead[]>(`/campaigns/${campaign.id}/leads?q=${encodeURIComponent(q)}&status=${status}`),
+  });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["leads", campaign.id] });
+    qc.invalidateQueries({ queryKey: ["campaign", campaign.id] });
+    qc.invalidateQueries({ queryKey: ["campaigns"] });
+  };
+  const imp = useMutation({
+    mutationFn: (list: LeadIn[]) => apiPost<LeadImportResult>(`/campaigns/${campaign.id}/leads`, { leads: list }),
+    onSuccess: (r) => {
+      toast.success(`${r.added} leads added${r.skipped ? `, ${r.skipped} duplicates skipped` : ""}`);
+      setPreview(null);
+      setManual(false);
+      setOne({ email: "", first_name: "", last_name: "", company: "", title: "" });
+      refresh();
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+  const del = useMutation({
+    mutationFn: (id: string) => apiDelete(`/campaigns/${campaign.id}/leads/${id}`),
+    onSuccess: () => { toast.success("Lead removed"); refresh(); },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+  const readFile = async (f: File) => {
+    const text = await f.text();
+    const parsed = toLeads(text);
+    if (!parsed.leads.length) toast.error("No valid emails found — make sure the CSV has an 'email' column");
+    else setPreview({ ...parsed, file: f.name });
+  };
+  const onFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) void readFile(f);
+    e.target.value = "";
+  };
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDrag(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) void readFile(f);
+  };
+  const rows = leads.isError ? [] : leads.data ?? [];
+
+  return (
+    <div className="space-y-5">
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={onDrop}
+        className={cn(
+          "flex flex-col items-center gap-4 rounded-xl border border-dashed p-6 text-center transition-colors duration-150 sm:flex-row sm:text-left",
+          drag ? "border-cyan-400 bg-cyan-500/5" : "border-[#263247] bg-panel",
+        )}
+        data-testid="csv-dropzone"
+      >
+        <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-[#1E293B]"><FileUp className="size-5 text-cyan" /></div>
+        <div className="flex-1">
+          <p className="font-medium text-slate-100">Import leads from CSV</p>
+          <p className="text-sm text-slate-400">Drag a file here. Columns: <span className="font-mono text-xs text-slate-300">email, first_name, last_name, company, title</span></p>
+        </div>
+        <input ref={fileRef} type="file" accept=".csv,text/csv,.txt" className="hidden" onChange={onFile} data-testid="csv-file-input" />
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setManual(true)} data-testid="add-lead-manual-button"><UserPlus className="size-4" />Add one</Button>
+          <Button onClick={() => fileRef.current?.click()} data-testid="csv-upload-button"><Upload className="size-4" />Upload CSV</Button>
+        </div>
+      </div>
+
+      <Panel
+        title={<span>Leads <span className="ml-1 font-mono text-xs text-slate-500">{rows.length}</span></span>}
+        action={
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-500" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="h-8 w-40 pl-8 text-xs sm:w-56" data-testid="lead-search-input" />
+            </div>
+            <Select value={status} onValueChange={(v: string) => setStatus(v)}>
+              <SelectTrigger size="sm" className="w-36" data-testid="lead-status-filter">
+                <SelectValue>{(v) => (v === "all" ? "All statuses" : LEAD_STATUS[v as keyof typeof LEAD_STATUS]?.label)}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {Object.entries(LEAD_STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        }
+        testId="leads-panel"
+      >
+        <div className="max-h-[560px] overflow-auto scroll-thin">
+          <table className="w-full text-sm" data-testid="leads-table">
+            <thead className="sticky top-0 bg-panel text-left text-[11px] uppercase tracking-[0.07em] text-slate-500">
+              <tr className="border-b border-[#1E293B]">
+                <th className="px-5 py-2.5 font-semibold">Contact</th>
+                <th className="px-3 py-2.5 font-semibold">Company</th>
+                <th className="px-3 py-2.5 font-semibold">Status</th>
+                <th className="px-3 py-2.5 font-semibold">Step</th>
+                <th className="px-3 py-2.5 font-semibold">Engagement</th>
+                <th className="px-3 py-2.5 font-semibold">Last sent</th>
+                <th className="px-3 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((l) => (
+                <tr key={l.id} className="border-b border-[#1E293B]/70 transition-colors hover:bg-white/[0.02]" data-testid={`lead-row-${l.id}`}>
+                  <td className="px-5 py-2.5">
+                    <p className="font-medium text-slate-100">{`${l.first_name} ${l.last_name}`.trim() || "—"}</p>
+                    <p className="font-mono text-xs text-slate-500">{l.email}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-slate-300">{l.company || "—"}<p className="text-xs text-slate-500">{l.title}</p></td>
+                  <td className="px-3 py-2.5"><Pill cls={LEAD_STATUS[l.status].cls}>{LEAD_STATUS[l.status].label}</Pill></td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-slate-400">{Math.min(l.current_step, campaign.steps.length)}/{campaign.steps.length}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex gap-1">
+                      {l.opened && <Pill cls="border-sky-500/30 bg-sky-500/10 text-sky-300">Opened</Pill>}
+                      {l.clicked && <Pill cls="border-amber-500/30 bg-amber-500/10 text-amber-300">Clicked</Pill>}
+                      {!l.opened && !l.clicked && <span className="text-xs text-slate-600">—</span>}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-slate-400">{timeAgo(l.last_sent_at)}</td>
+                  <td className="px-3 py-2.5 text-right">
+                    <Button variant="ghost" size="icon-xs" onClick={() => del.mutate(l.id)} data-testid={`lead-delete-${l.id}`} aria-label="Remove lead">
+                      <Trash2 className="size-3.5 text-slate-500" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {leads.data && rows.length === 0 && (
+                <tr><td colSpan={7} className="px-5 py-12 text-center text-sm text-slate-500" data-testid="leads-empty">No leads yet — upload a CSV to get started.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
+      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+        <DialogContent className="sm:max-w-2xl" data-testid="csv-preview-dialog">
+          <DialogHeader>
+            <DialogTitle>Import {preview?.leads.length} leads</DialogTitle>
+            <DialogDescription>
+              From <span className="font-mono">{preview?.file}</span>{preview?.invalid ? ` · ${preview.invalid} rows skipped (invalid email)` : ""}. Duplicates in this campaign are skipped automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-72 overflow-auto rounded-lg border border-[#1E293B] scroll-thin">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-[#161F30] text-left text-slate-400">
+                <tr>{["Email", "First", "Last", "Company", "Title"].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {preview?.leads.slice(0, 50).map((l, i) => (
+                  <tr key={i} className="border-t border-[#1E293B]">
+                    <td className="px-3 py-1.5 font-mono">{l.email}</td><td className="px-3 py-1.5">{l.first_name}</td>
+                    <td className="px-3 py-1.5">{l.last_name}</td><td className="px-3 py-1.5">{l.company}</td><td className="px-3 py-1.5">{l.title}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreview(null)} data-testid="csv-preview-cancel">Cancel</Button>
+            <Button onClick={() => preview && imp.mutate(preview.leads)} disabled={imp.isPending} data-testid="csv-import-confirm">
+              {imp.isPending && <Loader2 className="size-4 animate-spin" />} Import leads
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={manual} onOpenChange={setManual}>
+        <DialogContent className="sm:max-w-md" data-testid="add-lead-dialog">
+          <form onSubmit={(e) => { e.preventDefault(); imp.mutate([one]); }}>
+            <DialogHeader><DialogTitle>Add a lead</DialogTitle></DialogHeader>
+            <div className="my-5 grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1.5"><Label>Email</Label><Input type="email" required value={one.email} onChange={(e) => setOne({ ...one, email: e.target.value })} data-testid="lead-email-input" /></div>
+              <div className="space-y-1.5"><Label>First name</Label><Input value={one.first_name} onChange={(e) => setOne({ ...one, first_name: e.target.value })} data-testid="lead-first-name-input" /></div>
+              <div className="space-y-1.5"><Label>Last name</Label><Input value={one.last_name} onChange={(e) => setOne({ ...one, last_name: e.target.value })} data-testid="lead-last-name-input" /></div>
+              <div className="space-y-1.5"><Label>Company</Label><Input value={one.company} onChange={(e) => setOne({ ...one, company: e.target.value })} data-testid="lead-company-input" /></div>
+              <div className="space-y-1.5"><Label>Title</Label><Input value={one.title} onChange={(e) => setOne({ ...one, title: e.target.value })} data-testid="lead-title-input" /></div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={imp.isPending} data-testid="add-lead-submit">{imp.isPending && <Loader2 className="size-4 animate-spin" />}Add lead</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ---------------- Sequence tab ----------------
+const VARS = ["first_name", "last_name", "company", "title"];
+const SAMPLE = { first_name: "Olivia", last_name: "Carter", company: "Northwind", title: "VP Sales", email: "olivia@northwind.com" };
+const render = (t: string) => t.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (m, k: string) => (SAMPLE as Record<string, string>)[k.toLowerCase()] ?? m);
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+export function SequenceTab({ campaign }: { campaign: Campaign }) {
+  const qc = useQueryClient();
+  const [steps, setSteps] = useState<Step[]>(campaign.steps);
+  const [active, setActive] = useState(0);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const dirty = JSON.stringify(steps) !== JSON.stringify(campaign.steps);
+  const save = useMutation({
+    mutationFn: () => apiPut<Campaign>(`/campaigns/${campaign.id}`, { steps }),
+    onSuccess: (c) => {
+      qc.setQueryData(["campaign", campaign.id], c);
+      setSteps(c.steps);
+      qc.invalidateQueries({ queryKey: ["campaigns"] });
+      toast.success("Sequence saved");
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+  const cur = steps[active];
+  const patch = (p: Partial<Step>) => setSteps(steps.map((s, i) => (i === active ? { ...s, ...p } : s)));
+  const insertVar = (v: string) => {
+    const el = bodyRef.current;
+    const token = `{{${v}}}`;
+    if (!el || !cur) return;
+    const a = el.selectionStart ?? cur.body.length;
+    const b = el.selectionEnd ?? a;
+    patch({ body: cur.body.slice(0, a) + token + cur.body.slice(b) });
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a + token.length, a + token.length); });
+  };
+  const add = () => {
+    setSteps([...steps, { id: `new-${uid()}`, subject: "", body: "Hi {{first_name}},\n\n", delay_days: 3 }]);
+    setActive(steps.length);
+  };
+  const remove = (i: number) => {
+    const next = steps.filter((_, j) => j !== i);
+    setSteps(next);
+    setActive(Math.max(0, Math.min(active, next.length - 1)));
+  };
+  const firstSubject = steps[0]?.subject ?? "";
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-12">
+      <div className="space-y-2 lg:col-span-4" data-testid="sequence-steps-list">
+        {steps.map((s, i) => (
+          <div key={s.id}>
+            {i > 0 && (
+              <div className="flex items-center gap-2 py-1.5 pl-5 text-xs text-slate-500">
+                <Clock className="size-3.5" /> Wait <span className="font-mono text-slate-300">{s.delay_days}</span> day{s.delay_days === 1 ? "" : "s"}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setActive(i)}
+              className={cn(
+                "w-full rounded-xl border p-4 text-left transition-[border-color,background-color] duration-150",
+                i === active ? "border-blue-500/60 bg-blue-600/10" : "border-[#1E293B] bg-panel hover:border-slate-700",
+              )}
+              data-testid={`sequence-step-${i}`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-cyan">Step {i + 1}</span>
+                {steps.length > 1 && (
+                  <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); remove(i); }} className="rounded p-1 text-slate-500 hover:bg-white/5 hover:text-red-300" data-testid={`sequence-step-delete-${i}`}>
+                    <Trash2 className="size-3.5" />
+                  </span>
+                )}
+              </div>
+              <p className="mt-1.5 truncate text-sm font-medium text-slate-100">{s.subject || (i > 0 ? `Re: ${firstSubject}` : "No subject")}</p>
+              <p className="mt-0.5 truncate text-xs text-slate-500">{s.body.replace(/\n/g, " ") || "Empty"}</p>
+            </button>
+          </div>
+        ))}
+        <Button variant="outline" className="w-full border-dashed" onClick={add} data-testid="sequence-add-step-button"><Plus className="size-4" />Add follow-up step</Button>
+      </div>
+
+      <div className="space-y-5 lg:col-span-8">
+        {cur && (
+          <Panel
+            title={`Step ${active + 1}`}
+            action={
+              <Button size="sm" onClick={() => save.mutate()} disabled={!dirty || save.isPending} data-testid="sequence-save-button">
+                {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} {dirty ? "Save sequence" : "Saved"}
+              </Button>
+            }
+            testId="sequence-editor"
+          >
+            <div className="space-y-4 p-5">
+              {active > 0 && (
+                <div className="flex items-center gap-3">
+                  <Label className="shrink-0">Send after</Label>
+                  <Input type="number" min={0} max={60} value={cur.delay_days} onChange={(e) => patch({ delay_days: Math.max(0, Number(e.target.value) || 0) })} className="w-20" data-testid="step-delay-input" />
+                  <span className="text-sm text-slate-400">days if no reply</span>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input value={cur.subject} onChange={(e) => patch({ subject: e.target.value })} placeholder={active > 0 ? "Leave empty to reply in the same thread" : "Subject line"} data-testid="step-subject-input" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label>Body</Label>
+                  <div className="flex flex-wrap gap-1">
+                    {VARS.map((v) => (
+                      <button key={v} type="button" onClick={() => insertVar(v)} className="rounded-md border border-[#263247] bg-[#161F30] px-2 py-0.5 font-mono text-[11px] text-cyan transition-colors hover:border-cyan-500/50" data-testid={`insert-var-${v}`}>
+                        {`{{${v}}}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Textarea ref={bodyRef} value={cur.body} onChange={(e) => patch({ body: e.target.value })} rows={11} className="font-mono text-[13px] leading-relaxed" data-testid="step-body-input" />
+                <p className="text-xs text-slate-500">Plain text. Links are tracked automatically when click tracking is on.</p>
+              </div>
+            </div>
+          </Panel>
+        )}
+        {cur && (
+          <Panel title="Preview" testId="sequence-preview">
+            <div className="p-5 text-sm">
+              <p className="text-xs text-slate-500">To: <span className="font-mono text-slate-300">{SAMPLE.email}</span></p>
+              <p className="mt-1 font-medium text-white">{render(cur.subject) || `Re: ${render(firstSubject)}`}</p>
+              <div className="mt-4 whitespace-pre-wrap rounded-lg border border-[#1E293B] bg-[#0B0F17] p-4 leading-relaxed text-slate-300">{render(cur.body)}</div>
+            </div>
+          </Panel>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- Settings tab ----------------
+const HOURS = Array.from({ length: 25 }, (_, i) => i);
+
+export function SettingsTab({ campaign }: { campaign: Campaign }) {
+  const qc = useQueryClient();
+  const senders = useQuery({ queryKey: ["senders"], queryFn: () => apiGet<Sender[]>("/senders") });
+  const [s, setS] = useState({
+    name: campaign.name, sender_ids: campaign.sender_ids, daily_limit: campaign.daily_limit,
+    track_opens: campaign.track_opens, track_clicks: campaign.track_clicks, stop_on_reply: campaign.stop_on_reply,
+    send_start_hour: campaign.send_start_hour, send_end_hour: campaign.send_end_hour,
+  });
+  const save = useMutation({
+    mutationFn: () => apiPut<Campaign>(`/campaigns/${campaign.id}`, s),
+    onSuccess: (c) => {
+      qc.setQueryData(["campaign", campaign.id], c);
+      qc.invalidateQueries({ queryKey: ["campaigns"] });
+      toast.success("Settings saved");
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+  const toggleSender = (id: string, on: boolean) => setS({ ...s, sender_ids: on ? [...s.sender_ids, id] : s.sender_ids.filter((x) => x !== id) });
+  const hourLabel = (h: number) => (h === 24 ? "24:00" : `${String(h).padStart(2, "0")}:00`);
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-12">
+      <Panel className="lg:col-span-7" title="Sender rotation" testId="settings-senders-panel">
+        <div className="p-5">
+          <p className="mb-4 text-sm text-slate-400">Emails rotate across selected inboxes. Each lead keeps the same inbox for every follow-up.</p>
+          <ul className="space-y-2">
+            {(senders.data ?? []).map((x) => (
+              <li key={x.id}>
+                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#1E293B] bg-[#0B0F17] px-4 py-3 transition-colors hover:border-slate-700">
+                  <Checkbox checked={s.sender_ids.includes(x.id)} onCheckedChange={(v) => toggleSender(x.id, !!v)} data-testid={`settings-sender-checkbox-${x.id}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-mono text-sm text-slate-200">{x.email}</p>
+                    <p className="text-xs text-slate-500">{x.from_name || "No display name"} · {x.daily_limit}/day</p>
+                  </div>
+                  {x.status === "error" && <Pill cls="border-red-500/30 bg-red-500/10 text-red-300">Error</Pill>}
+                </label>
+              </li>
+            ))}
+            {senders.data?.length === 0 && <li className="text-sm text-slate-500">No sender accounts connected yet.</li>}
+          </ul>
+        </div>
+      </Panel>
+      <div className="space-y-6 lg:col-span-5">
+        <Panel title="Campaign" testId="settings-general-panel">
+          <div className="space-y-4 p-5">
+            <div className="space-y-1.5"><Label>Name</Label><Input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} data-testid="settings-name-input" /></div>
+            <div className="space-y-1.5"><Label>Max emails per day (campaign)</Label><Input type="number" min={1} value={s.daily_limit} onChange={(e) => setS({ ...s, daily_limit: Math.max(1, Number(e.target.value) || 1) })} data-testid="settings-daily-limit-input" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Send from (UTC)</Label>
+                <Select value={String(s.send_start_hour)} onValueChange={(v: string) => setS({ ...s, send_start_hour: Number(v) })}>
+                  <SelectTrigger className="w-full" data-testid="settings-start-hour"><SelectValue>{(v) => hourLabel(Number(v))}</SelectValue></SelectTrigger>
+                  <SelectContent>{HOURS.slice(0, 24).map((h) => <SelectItem key={h} value={String(h)}>{hourLabel(h)}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Until (UTC)</Label>
+                <Select value={String(s.send_end_hour)} onValueChange={(v: string) => setS({ ...s, send_end_hour: Number(v) })}>
+                  <SelectTrigger className="w-full" data-testid="settings-end-hour"><SelectValue>{(v) => hourLabel(Number(v))}</SelectValue></SelectTrigger>
+                  <SelectContent>{HOURS.slice(1).map((h) => <SelectItem key={h} value={String(h)}>{hourLabel(h)}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </Panel>
+        <Panel title="Tracking & behaviour" testId="settings-tracking-panel">
+          <div className="divide-y divide-[#1E293B]">
+            {([
+              ["track_opens", "Track opens", "Adds an invisible 1px image to each email"],
+              ["track_clicks", "Track clicks", "Rewrites links through a redirect"],
+              ["stop_on_reply", "Stop on reply", "Halt the sequence when a lead replies"],
+            ] as const).map(([k, l, d]) => (
+              <label key={k} className="flex cursor-pointer items-center justify-between gap-4 px-5 py-3.5">
+                <div><p className="text-sm font-medium text-slate-100">{l}</p><p className="text-xs text-slate-500">{d}</p></div>
+                <Switch checked={s[k]} onCheckedChange={(v) => setS({ ...s, [k]: v })} data-testid={`settings-${k}-switch`} />
+              </label>
+            ))}
+          </div>
+        </Panel>
+        <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending} data-testid="settings-save-button">
+          {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save settings
+        </Button>
+      </div>
+    </div>
+  );
+}

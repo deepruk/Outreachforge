@@ -1,0 +1,203 @@
+// Hand-written mirrors of backend/models/schemas.py — keep in sync.
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  created_at: string;
+}
+
+export type SenderStatus = "active" | "error" | "paused" | "demo";
+
+export interface SenderIn {
+  email: string;
+  from_name: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_security: "ssl" | "starttls" | "none";
+  smtp_user: string;
+  smtp_pass: string;
+  imap_host: string;
+  imap_port: number;
+  imap_user: string;
+  imap_pass: string;
+  daily_limit: number;
+}
+
+export interface Sender {
+  id: string;
+  email: string;
+  from_name: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_security: string;
+  imap_host: string;
+  imap_port: number;
+  daily_limit: number;
+  status: SenderStatus;
+  last_error: string;
+  sent_today: number;
+  sent_total: number;
+  reply_count: number;
+  last_synced_at: string | null;
+  created_at: string;
+}
+
+export interface ConnectionTest {
+  smtp_ok: boolean;
+  smtp_error: string;
+  imap_ok: boolean;
+  imap_error: string;
+}
+
+export type CampaignStatus = "draft" | "active" | "paused" | "completed";
+
+export interface Step {
+  id: string;
+  subject: string;
+  body: string;
+  delay_days: number;
+}
+
+export interface StatTotals {
+  leads: number;
+  contacted: number;
+  sent: number;
+  opened: number;
+  clicked: number;
+  replied: number;
+  bounced: number;
+  open_rate: number;
+  click_rate: number;
+  reply_rate: number;
+  bounce_rate: number;
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  steps: Step[];
+  sender_ids: string[];
+  daily_limit: number;
+  track_opens: boolean;
+  track_clicks: boolean;
+  stop_on_reply: boolean;
+  send_start_hour: number;
+  send_end_hour: number;
+  created_at: string;
+  launched_at: string | null;
+  stats: StatTotals;
+  progress: number;
+}
+
+export type CampaignUpdate = Partial<
+  Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "send_start_hour" | "send_end_hour">
+>;
+
+export type LeadStatus = "pending" | "in_progress" | "completed" | "replied" | "bounced" | "unsubscribed";
+
+export interface LeadIn {
+  email: string;
+  first_name: string;
+  last_name: string;
+  company: string;
+  title: string;
+}
+
+export interface Lead extends LeadIn {
+  id: string;
+  campaign_id: string;
+  status: LeadStatus;
+  current_step: number;
+  next_send_at: string | null;
+  last_sent_at: string | null;
+  opened: boolean;
+  clicked: boolean;
+  created_at: string;
+}
+
+export interface LeadImportResult {
+  added: number;
+  skipped: number;
+}
+
+export interface SeriesPoint {
+  date: string;
+  sent: number;
+  opened: number;
+  clicked: number;
+  replied: number;
+}
+
+export interface StepStat {
+  step: number;
+  subject: string;
+  sent: number;
+  opened: number;
+  clicked: number;
+  replied: number;
+}
+
+export interface CampaignRow {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  stats: StatTotals;
+}
+
+export interface Analytics {
+  totals: StatTotals;
+  series: SeriesPoint[];
+  campaigns: CampaignRow[];
+  steps: StepStat[];
+}
+
+export type ThreadLabel = "none" | "interested" | "meeting_booked" | "not_interested" | "out_of_office" | "wrong_person";
+
+export interface Thread {
+  id: string;
+  lead_id: string;
+  campaign_id: string;
+  campaign_name: string;
+  sender_id: string;
+  sender_email: string;
+  contact_email: string;
+  contact_name: string;
+  company: string;
+  subject: string;
+  snippet: string;
+  last_at: string;
+  unread: boolean;
+  label: ThreadLabel;
+}
+
+export interface ThreadMessage {
+  id: string;
+  direction: "in" | "out";
+  from_email: string;
+  to_email: string;
+  subject: string;
+  body: string;
+  at: string;
+  kind: "campaign" | "reply" | "manual";
+}
+
+export interface ThreadDetail {
+  thread: Thread;
+  messages: ThreadMessage[];
+}
+
+export interface InboxCounts {
+  all: number;
+  unread: number;
+  interested: number;
+  meeting_booked: number;
+  not_interested: number;
+  out_of_office: number;
+  wrong_person: number;
+}
+
+export interface SyncResult {
+  new_replies: number;
+  errors: string[];
+}
