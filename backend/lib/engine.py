@@ -321,7 +321,31 @@ async def sync_sender(sender: dict) -> int:
             if orig:
                 lead = await db.leads.find_one({"id": orig["lead_id"]}, {"_id": 0})
         if not lead:
-            lead = await db.leads.find_one({"user_id": uid, "email": m["from_email"], "current_step": {"$gt": 0}}, {"_id": 0}, sort=[("last_sent_at", -1)])
+            # Match the sender's reply to a recently contacted lead, tolerating Re:/Fwd: prefixes.
+            recent = await db.leads.find(
+                {"user_id": uid, "email": m["from_email"], "current_step": {"$gt": 0}},
+                {"_id": 0},
+            ).sort("last_sent_at", -1).to_list(50)
+            def normalise_subject(value: str) -> str:
+                value = " ".join((value or "").strip().split()).lower()
+                while True:
+                    updated = value
+                    for prefix in ("re:", "fw:", "fwd:"):
+                        if value.startswith(prefix):
+                            value = value[len(prefix):].strip()
+                    if updated == value:
+                        return value
+            incoming_subject = normalise_subject(m.get("subject", ""))
+            lead = next(
+                (candidate for candidate in recent
+                 if normalise_subject(candidate.get("last_subject", "")) == incoming_subject
+                 and candidate.get("last_subject")),
+                None,
+            )
+            if not lead and len(recent) == 1:
+                lead = recent[0]
+            if not lead and recent:
+                lead = recent[0]
         if not lead:
             continue
         body = mailer.strip_quoted(m["body"])
