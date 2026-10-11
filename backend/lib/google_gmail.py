@@ -159,32 +159,47 @@ def _text_from_message(msg: email.message.Message) -> str:
 
 
 def fetch_new(sender: dict, last_cursor: int) -> tuple[list[dict], int]:
-    """Fetch inbox messages after the stored Unix timestamp cursor (first sync: last 7 days)."""
-    query = f"in:inbox after:{int(last_cursor)}" if last_cursor else "in:inbox newer_than:7d"
+    """Fetch inbox messages since the last Unix-second cursor, with pagination and a small overlap.
+
+    Gmail's `after:` search accepts Unix seconds through the API. The overlap protects
+    against delayed message indexing; duplicate messages are discarded by record_reply().
+    """
+    # Re-scan five minutes to avoid losing messages that Gmail indexes late.
+    query = f"in:inbox after:{max(0, int(last_cursor) - 300)}" if last_cursor else "in:inbox newer_than:7d"
     token = access_token(sender)
-    listed = _request("GET", "/messages", sender, bearer_token=token, params={"q": query, "maxResults": 100})
-    refs = listed.json().get("messages") or []
     out: list[dict] = []
-    for ref in refs:
-        message = _request("GET", f"/messages/{ref['id']}", sender, bearer_token=token, params={"format": "raw"}).json()
-        raw = message.get("raw")
-        if not raw:
-            continue
-        try:
-            msg = email.message_from_bytes(
-                base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
-            )
-        except Exception:
-            continue
-        out.append({
-            "uid": int(message.get("internalDate", 0)) // 1000,
-            "from_email": parseaddr(msg.get("From", ""))[1].lower(),
-            "from_name": _decode_header(parseaddr(msg.get("From", ""))[0]),
-            "subject": _decode_header(msg.get("Subject")),
-            "message_id": (msg.get("Message-ID") or "").strip(),
-            "in_reply_to": (msg.get("In-Reply-To") or "").strip(),
-            "references": (msg.get("References") or "").strip(),
-            "body": _text_from_message(msg),
-        })
-    # Cursor is a Unix timestamp, not a Gmail message ID. Gmail search accepts epoch seconds.
+    page_token: str | None = None
+    while True:
+        params: dict = {"q": query, "maxResults": 100}
+        if page_token:
+            params["pageToken"] = page_token
+        listed = _request("GET", "/messages", sender, bearer_token=token, params=params).json()
+        for ref in listed.get("messages") or []:
+            message = _request(
+                "GET", f"/messages/{ref['id']}", sender,
+                bearer_token=token, params={"format": "raw"}
+            ).json()
+            raw = message.get("raw")
+            if not raw:
+                continue
+            try:
+                msg = email.message_from_bytes(
+                    base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
+                )
+            except Exception:
+                continue
+            out.append({
+                "uid": int(message.get("internalDate", 0)) // 1000,
+                "from_email": parseaddr(msg.get("From", ""))[1].lower(),
+                "from_name": _decode_header(parseaddr(msg.get("From", ""))[0]),
+                "subject": _decode_header(msg.get("Subject")),
+                "message_id": (msg.get("Message-ID") or "").strip(),
+                "in_reply_to": (msg.get("In-Reply-To") or "").strip(),
+                "references": (msg.get("References") or "").strip(),
+                "body": _text_from_message(msg),
+            })
+        page_token = listed.get("nextPageToken")
+        if not page_token:
+            break
+    # Cursor is Unix seconds, not a Gmail message ID. The next sync overlaps 5 minutes.
     return out, int(time.time())
