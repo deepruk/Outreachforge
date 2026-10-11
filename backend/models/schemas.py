@@ -58,6 +58,7 @@ class SenderUpdate(BaseModel):
 
 class SenderOut(BaseModel):
     id: str
+    auth_type: str = "smtp"
     email: str
     from_name: str
     smtp_host: str
