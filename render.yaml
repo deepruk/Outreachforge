@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: outreachforge-1
+    runtime: static
+    rootDir: frontend
+    buildCommand: yarn install && yarn build
+    staticPublishPath: dist
+    routes:
+      # Keep API requests on the frontend origin so the existing session flow remains same-origin.
+      - type: rewrite
+        source: /api/*
+        destination: https://outreachforge.onrender.com/api/*
+      # React client-side routes must fall back to the app shell.
+      - type: rewrite
+        source: /*
+        destination: /index.html
