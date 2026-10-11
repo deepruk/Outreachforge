@@ -4,7 +4,7 @@ from datetime import timedelta
 from lib.db import db
 from lib.util import now, pct
 
-PROJ = {"_id": 0, "campaign_id": 1, "step_index": 1, "sent_at": 1, "opened_at": 1,
+PROJ = {"_id": 0, "campaign_id": 1, "step_index": 1, "sent_at": 1, "opened_at": 1, "open_count": 1, "click_count": 1,
         "clicked_at": 1, "replied_at": 1, "bounced": 1, "lead_id": 1, "unsubscribed": 1, "variant": 1}
 
 
