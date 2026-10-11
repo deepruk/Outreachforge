@@ -88,11 +88,11 @@ export default function NotificationBell() {
           </span>
         )}
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 border border-[#1E293B] bg-[#111827] p-0 shadow-2xl shadow-black/50" data-testid="notifications-panel">
-        <div className="flex items-center justify-between border-b border-[#1E293B] px-4 py-3">
+      <PopoverContent align="end" className="w-96 border border-border bg-panel p-0 shadow-2xl shadow-black/50" data-testid="notifications-panel">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
-            <p className="font-heading text-sm font-semibold text-white">Hot lead alerts</p>
-            <p className="text-[11px] text-slate-500">Interested & meeting-booked replies</p>
+            <p className="font-heading text-sm font-semibold text-foreground">Hot lead alerts</p>
+            <p className="text-[11px] text-muted-foreground">Interested & meeting-booked replies</p>
           </div>
           {unread > 0 && (
             <button type="button" onClick={() => readAll.mutate()} className="text-xs text-cyan hover:underline" data-testid="notifications-read-all">Mark all read</button>
@@ -101,22 +101,22 @@ export default function NotificationBell() {
         <ul className="max-h-80 overflow-y-auto scroll-thin">
           {items.map((n) => (
             <li key={n.id}>
-              <button type="button" onClick={() => openThread(n)} className={cn("flex w-full gap-3 border-b border-[#1E293B]/60 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]", !n.read && "bg-blue-600/[0.06]")} data-testid={`notification-item-${n.id}`}>
+              <button type="button" onClick={() => openThread(n)} className={cn("flex w-full gap-3 border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-foreground/[0.03]", !n.read && "bg-blue-600/[0.06]")} data-testid={`notification-item-${n.id}`}>
                 <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-full", n.label === "meeting_booked" ? "bg-indigo-500/20 text-indigo-300" : "bg-emerald-500/20 text-emerald-300")}>
                   {n.label === "meeting_booked" ? <CalendarCheck className="size-3.5" /> : <Flame className="size-3.5" />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-2">
-                    <span className={cn("truncate text-sm", n.read ? "text-slate-300" : "font-semibold text-white")}>{n.contact_name}</span>
-                    <span className="shrink-0 font-mono text-[10px] text-slate-500">{timeAgo(n.created_at)}</span>
+                    <span className={cn("truncate text-sm", n.read ? "text-foreground/75" : "font-semibold text-foreground")}>{n.contact_name}</span>
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{timeAgo(n.created_at)}</span>
                   </span>
-                  <span className="block text-[11px] text-slate-500">{LABEL[n.label] ?? n.label}{n.campaign_name ? ` · ${n.campaign_name}` : ""}</span>
-                  <span className="mt-0.5 line-clamp-2 block text-xs text-slate-400">{n.snippet}</span>
+                  <span className="block text-[11px] text-muted-foreground">{LABEL[n.label] ?? n.label}{n.campaign_name ? ` · ${n.campaign_name}` : ""}</span>
+                  <span className="mt-0.5 line-clamp-2 block text-xs text-muted-foreground">{n.snippet}</span>
                 </span>
               </button>
             </li>
           ))}
-          {items.length === 0 && <li className="px-4 py-10 text-center text-sm text-slate-500">No hot replies yet.</li>}
+          {items.length === 0 && <li className="px-4 py-10 text-center text-sm text-muted-foreground">No hot replies yet.</li>}
         </ul>
         <div className="flex items-center justify-between gap-2 px-4 py-2.5">
           {perm === "granted" ? (
@@ -124,7 +124,7 @@ export default function NotificationBell() {
           ) : perm === "unsupported" ? <span /> : (
             <button type="button" onClick={enableDesktop} className="text-xs text-cyan hover:underline" data-testid="notifications-enable-desktop">Enable desktop alerts</button>
           )}
-          <button type="button" onClick={() => test.mutate()} className="text-xs text-slate-400 hover:text-slate-200" data-testid="notifications-send-test">Send test alert</button>
+          <button type="button" onClick={() => test.mutate()} className="text-xs text-muted-foreground hover:text-foreground/90" data-testid="notifications-send-test">Send test alert</button>
         </div>
       </PopoverContent>
     </Popover>

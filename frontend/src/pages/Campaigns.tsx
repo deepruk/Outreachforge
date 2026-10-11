@@ -56,7 +56,7 @@ export default function Campaigns() {
         actions={<Button onClick={() => setOpen(true)} data-testid="create-campaign-button"><Plus className="size-4" /> New campaign</Button>}
       />
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-1 rounded-lg border border-[#1E293B] bg-panel p-1">
+        <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-panel p-1">
           {FILTERS.map((f) => (
             <button
               key={f}
@@ -64,7 +64,7 @@ export default function Campaigns() {
               data-testid={`campaign-filter-${f}`}
               className={cn(
                 "rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors duration-150",
-                filter === f ? "bg-[#1E293B] text-white" : "text-slate-400 hover:text-slate-200",
+                filter === f ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground/90",
               )}
             >
               {f}
@@ -72,7 +72,7 @@ export default function Campaigns() {
           ))}
         </div>
         <div className="relative w-full sm:w-72">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search campaigns" className="h-9 pl-9" data-testid="campaign-search-input" />
         </div>
       </div>
@@ -86,8 +86,8 @@ export default function Campaigns() {
           action={<Button onClick={() => setOpen(true)} data-testid="empty-create-campaign-button"><Plus className="size-4" />New campaign</Button>}
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-[#1E293B] bg-panel" data-testid="campaigns-table">
-          <div className="hidden grid-cols-12 gap-3 border-b border-[#1E293B] px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500 md:grid">
+        <div className="overflow-hidden rounded-xl border border-border bg-panel" data-testid="campaigns-table">
+          <div className="hidden grid-cols-12 gap-3 border-b border-border px-5 py-2.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground md:grid">
             <span className="col-span-4">Campaign</span>
             <span className="col-span-2">Progress</span>
             <span className="col-span-1 text-right">Leads</span>
@@ -97,24 +97,24 @@ export default function Campaigns() {
             <span className="col-span-2 text-right">Replied</span>
           </div>
           {!camps.data && !camps.isError &&
-            Array.from({ length: 4 }).map((_, i) => <div key={i} className="m-3 h-12 animate-pulse rounded-lg bg-[#161F30]" />)}
+            Array.from({ length: 4 }).map((_, i) => <div key={i} className="m-3 h-12 animate-pulse rounded-lg bg-muted" />)}
           {list.map((c, i) => (
             <Link
               key={c.id}
               to={`/campaigns/${c.id}`}
-              className="grid grid-cols-2 items-center gap-3 border-b border-[#1E293B] px-5 py-4 transition-colors duration-150 last:border-0 hover:bg-white/[0.025] md:grid-cols-12 animate-fade-up"
+              className="grid grid-cols-2 items-center gap-3 border-b border-border px-5 py-4 transition-colors duration-150 last:border-0 hover:bg-foreground/[0.025] md:grid-cols-12 animate-fade-up"
               style={{ animationDelay: `${i * 40}ms` }}
               data-testid={`campaign-row-${c.id}`}
             >
               <div className="col-span-2 min-w-0 md:col-span-4">
-                <p className="truncate font-medium text-slate-100">{c.name}</p>
+                <p className="truncate font-medium text-foreground">{c.name}</p>
                 <div className="mt-1 flex items-center gap-2">
                   <Pill cls={CAMPAIGN_STATUS[c.status].cls} dot={CAMPAIGN_STATUS[c.status].dot} testId={`campaign-status-${c.id}`}>{CAMPAIGN_STATUS[c.status].label}</Pill>
-                  <span className="text-xs text-slate-500">{c.steps.length} steps · created {timeAgo(c.created_at)}</span>
+                  <span className="text-xs text-muted-foreground">{c.steps.length} steps · created {timeAgo(c.created_at)}</span>
                 </div>
               </div>
               <div className="col-span-2 md:col-span-2">
-                <p className="mb-1 font-mono text-[11px] text-slate-400">{c.progress.toFixed(0)}%</p>
+                <p className="mb-1 font-mono text-[11px] text-muted-foreground">{c.progress.toFixed(0)}%</p>
                 <RateBar value={c.progress} />
               </div>
               <Metric className="md:col-span-1" label="Leads" v={fmt(c.stats.leads)} />
@@ -154,9 +154,9 @@ export default function Campaigns() {
 function Metric({ label, v, sub, tone, className }: { label: string; v: string; sub?: string; tone?: string; className?: string }) {
   return (
     <div className={cn("text-left font-mono text-sm md:text-right", className)}>
-      <span className="block text-[10px] uppercase text-slate-500 md:hidden">{label}</span>
-      <span className={cn("text-slate-100", tone)}>{v}</span>
-      {sub && <span className="ml-1.5 text-[11px] text-slate-500">{sub}</span>}
+      <span className="block text-[10px] uppercase text-muted-foreground md:hidden">{label}</span>
+      <span className={cn("text-foreground", tone)}>{v}</span>
+      {sub && <span className="ml-1.5 text-[11px] text-muted-foreground">{sub}</span>}
     </div>
   );
 }

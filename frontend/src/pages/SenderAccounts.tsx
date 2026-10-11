@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Flame, Loader2, MoreHorizontal, Pause, Play, Plug, Plus, Server, SlidersHorizontal, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -37,8 +38,8 @@ function WarmupFields({ v, onChange, idPrefix }: {
     <fieldset className="space-y-3 rounded-lg border border-orange-500/20 bg-orange-500/[0.03] p-4" data-testid={`${idPrefix}-warmup-fieldset`}>
       <label className="flex cursor-pointer items-center justify-between gap-4">
         <div>
-          <p className="flex items-center gap-1.5 text-sm font-medium text-slate-100"><Flame className="size-4 text-orange-400" />Warm-up ramp</p>
-          <p className="text-xs text-slate-500">Start low and raise the daily cap each day to build sender reputation.</p>
+          <p className="flex items-center gap-1.5 text-sm font-medium text-foreground"><Flame className="size-4 text-orange-400" />Warm-up ramp</p>
+          <p className="text-xs text-muted-foreground">Start low and raise the daily cap each day to build sender reputation.</p>
         </div>
         <Switch checked={v.warmup_enabled} onCheckedChange={(c) => onChange({ warmup_enabled: c })} data-testid={`${idPrefix}-warmup-switch`} />
       </label>
@@ -48,7 +49,7 @@ function WarmupFields({ v, onChange, idPrefix }: {
             <div className="space-y-1.5"><Label>Start at (emails/day)</Label><Input type="number" min={1} value={v.warmup_start} onChange={(e) => onChange({ warmup_start: Math.max(1, Number(e.target.value) || 1) })} data-testid={`${idPrefix}-warmup-start-input`} /></div>
             <div className="space-y-1.5"><Label>Increase per day</Label><Input type="number" min={1} value={v.warmup_increment} onChange={(e) => onChange({ warmup_increment: Math.max(1, Number(e.target.value) || 1) })} data-testid={`${idPrefix}-warmup-increment-input`} /></div>
           </div>
-          <p className="text-xs text-slate-400" data-testid={`${idPrefix}-warmup-summary`}>
+          <p className="text-xs text-muted-foreground" data-testid={`${idPrefix}-warmup-summary`}>
             Day 1: {Math.min(v.warmup_start, v.daily_limit)}/day → reaches the full {v.daily_limit}/day on day {days}.
           </p>
         </>
@@ -83,7 +84,7 @@ function EditLimitsDialog({ sender, onClose }: { sender: Sender | null; onClose:
             <div className="space-y-1.5"><Label>Max per day</Label><Input type="number" min={1} max={2000} value={v.daily_limit} onChange={(e) => setV({ ...v, daily_limit: Math.max(1, Number(e.target.value) || 1) })} data-testid="edit-sender-daily-limit-input" /></div>
           </div>
           <WarmupFields v={v} onChange={(p) => setV({ ...v, ...p })} idPrefix="edit-sender" />
-          {sender?.warmup_enabled && <p className="text-xs text-slate-500">Turning warm-up off and on again restarts the ramp from day 1.</p>}
+          {sender?.warmup_enabled && <p className="text-xs text-muted-foreground">Turning warm-up off and on again restarts the ramp from day 1.</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} data-testid="edit-sender-cancel">Cancel</Button>
@@ -98,11 +99,11 @@ function TestResult({ r }: { r: ConnectionTest }) {
   const row = (ok: boolean, label: string, err: string) => (
     <div className="flex items-start gap-2 text-sm">
       {ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" /> : <XCircle className="mt-0.5 size-4 shrink-0 text-red-400" />}
-      <div><p className={ok ? "text-emerald-300" : "text-red-300"}>{label} {ok ? "connected" : "failed"}</p>{!ok && err && <p className="text-xs text-slate-500">{err}</p>}</div>
+      <div><p className={ok ? "text-emerald-300" : "text-red-300"}>{label} {ok ? "connected" : "failed"}</p>{!ok && err && <p className="text-xs text-muted-foreground">{err}</p>}</div>
     </div>
   );
   return (
-    <div className="space-y-2 rounded-lg border border-[#1E293B] bg-[#0B0F17] p-3" data-testid="connection-test-result">
+    <div className="space-y-2 rounded-lg border border-border bg-background p-3" data-testid="connection-test-result">
       {row(r.smtp_ok, "SMTP (sending)", r.smtp_error)}
       {row(r.imap_ok, "IMAP (reply sync)", r.imap_error)}
     </div>
@@ -151,7 +152,7 @@ function AddSenderDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {Object.entries(PRESETS).map(([k, p]) => (
                 <button key={k} type="button" onClick={() => applyPreset(k)} data-testid={`sender-preset-${k}`}
-                  className={`rounded-lg border px-3 py-2 text-left text-xs font-medium transition-colors duration-150 ${preset === k ? "border-blue-500/60 bg-blue-600/10 text-white" : "border-[#1E293B] text-slate-400 hover:border-slate-700"}`}>
+                  className={`rounded-lg border px-3 py-2 text-left text-xs font-medium transition-colors duration-150 ${preset === k ? "border-blue-500/60 bg-blue-600/10 text-white" : "border-border text-muted-foreground hover:border-foreground/20"}`}>
                   {p.label}
                 </button>
               ))}
@@ -161,8 +162,8 @@ function AddSenderDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
               <div className="space-y-1.5"><Label>Daily limit</Label><Input type="number" min={1} max={2000} value={f.daily_limit} onChange={(e) => set("daily_limit", Number(e.target.value) || 1)} data-testid="sender-daily-limit-input" /></div>
               <div className="space-y-1.5 sm:col-span-3"><Label>From name</Label><Input value={f.from_name} onChange={(e) => set("from_name", e.target.value)} placeholder="Alex Morgan" data-testid="sender-from-name-input" /></div>
             </div>
-            <fieldset className="space-y-3 rounded-lg border border-[#1E293B] p-4">
-              <legend className="px-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-400">SMTP · sending</legend>
+            <fieldset className="space-y-3 rounded-lg border border-border p-4">
+              <legend className="px-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">SMTP · sending</legend>
               <div className="grid gap-3 sm:grid-cols-6">
                 <div className="space-y-1.5 sm:col-span-3"><Label>Host</Label><Input required value={f.smtp_host} onChange={(e) => set("smtp_host", e.target.value)} data-testid="sender-smtp-host-input" /></div>
                 <div className="space-y-1.5"><Label>Port</Label><Input type="number" required value={f.smtp_port} onChange={(e) => set("smtp_port", Number(e.target.value))} data-testid="sender-smtp-port-input" /></div>
@@ -177,8 +178,8 @@ function AddSenderDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
                 <div className="space-y-1.5 sm:col-span-3"><Label>Password / app password</Label><Input type="password" required value={f.smtp_pass} onChange={(e) => set("smtp_pass", e.target.value)} data-testid="sender-smtp-pass-input" /></div>
               </div>
             </fieldset>
-            <fieldset className="space-y-3 rounded-lg border border-[#1E293B] p-4">
-              <legend className="px-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-400">IMAP · reply sync (SSL)</legend>
+            <fieldset className="space-y-3 rounded-lg border border-border p-4">
+              <legend className="px-1 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">IMAP · reply sync (SSL)</legend>
               <div className="grid gap-3 sm:grid-cols-6">
                 <div className="space-y-1.5 sm:col-span-4"><Label>Host</Label><Input value={f.imap_host} onChange={(e) => set("imap_host", e.target.value)} placeholder="Leave empty to skip reply sync" data-testid="sender-imap-host-input" /></div>
                 <div className="space-y-1.5 sm:col-span-2"><Label>Port</Label><Input type="number" value={f.imap_port} onChange={(e) => set("imap_port", Number(e.target.value))} data-testid="sender-imap-port-input" /></div>
@@ -205,7 +206,10 @@ function AddSenderDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
 
 export default function SenderAccounts() {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const [open, setOpenRaw] = useState(params.get("connect") === "1");
+  useEffect(() => { if (params.get("connect") === "1") setOpenRaw(true); }, [params]);
+  const setOpen = (v: boolean) => { setOpenRaw(v); if (!v && params.get("connect")) setParams({}); };
   const [testRes, setTestRes] = useState<{ id: string; r: ConnectionTest } | null>(null);
   const [editing, setEditing] = useState<Sender | null>(null);
   const senders = useQuery({ queryKey: ["senders"], queryFn: () => apiGet<Sender[]>("/senders") });
@@ -250,11 +254,11 @@ export default function SenderAccounts() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {list.map((s, i) => (
-            <div key={s.id} className="group rounded-xl border border-[#1E293B] bg-panel p-5 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-slate-700 animate-fade-up" style={{ animationDelay: `${i * 50}ms` }} data-testid={`sender-card-${s.id}`}>
+            <div key={s.id} className="group rounded-xl border border-border bg-panel p-5 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-foreground/20 animate-fade-up" style={{ animationDelay: `${i * 50}ms` }} data-testid={`sender-card-${s.id}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate font-mono text-sm font-medium text-white">{s.email}</p>
-                  <p className="text-xs text-slate-500">{s.from_name || "—"} · {s.smtp_host}</p>
+                  <p className="truncate font-mono text-sm font-medium text-foreground">{s.email}</p>
+                  <p className="text-xs text-muted-foreground">{s.from_name || "—"} · {s.smtp_host}</p>
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger render={<Button variant="ghost" size="icon-xs" data-testid={`sender-menu-${s.id}`} />}>
@@ -283,17 +287,17 @@ export default function SenderAccounts() {
               </div>
               {s.last_error && <p className="mt-2 line-clamp-2 text-xs text-red-300" data-testid={`sender-error-${s.id}`}>{s.last_error}</p>}
               <div className="mt-5">
-                <div className="mb-1.5 flex justify-between font-mono text-xs"><span className="text-slate-500">Sent today</span><span className="text-slate-200">{s.sent_today}/{s.effective_limit}</span></div>
+                <div className="mb-1.5 flex justify-between font-mono text-xs"><span className="text-muted-foreground">Sent today</span><span className="text-foreground/90">{s.sent_today}/{s.effective_limit}</span></div>
                 <RateBar value={(s.sent_today / Math.max(1, s.effective_limit)) * 100} color={s.status === "error" ? "bg-red-500" : "bg-cyan-500"} />
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-2 border-t border-[#1E293B] pt-4 text-center font-mono">
-                <div><p className="text-base text-white">{fmt(s.sent_total)}</p><p className="text-[10px] uppercase text-slate-500">Sent</p></div>
-                <div><p className="text-base text-emerald-300">{fmt(s.reply_count)}</p><p className="text-[10px] uppercase text-slate-500">Replies</p></div>
-                <div><p className="text-xs leading-6 text-slate-300">{s.imap_host ? timeAgo(s.last_synced_at) : "off"}</p><p className="text-[10px] uppercase text-slate-500">IMAP sync</p></div>
+              <div className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-4 text-center font-mono">
+                <div><p className="text-base text-foreground">{fmt(s.sent_total)}</p><p className="text-[10px] uppercase text-muted-foreground">Sent</p></div>
+                <div><p className="text-base text-emerald-300">{fmt(s.reply_count)}</p><p className="text-[10px] uppercase text-muted-foreground">Replies</p></div>
+                <div><p className="text-xs leading-6 text-foreground/75">{s.imap_host ? timeAgo(s.last_synced_at) : "off"}</p><p className="text-[10px] uppercase text-muted-foreground">IMAP sync</p></div>
               </div>
               {s.warmup_enabled && s.effective_limit < s.daily_limit && (
                 <div className="mt-3" data-testid={`sender-warmup-progress-${s.id}`}>
-                  <div className="mb-1 flex justify-between font-mono text-[11px] text-slate-500"><span>Ramp {s.effective_limit}/{s.daily_limit} per day</span><span>+{s.warmup_increment}/day</span></div>
+                  <div className="mb-1 flex justify-between font-mono text-[11px] text-muted-foreground"><span>Ramp {s.effective_limit}/{s.daily_limit} per day</span><span>+{s.warmup_increment}/day</span></div>
                   <RateBar value={(s.effective_limit / s.daily_limit) * 100} color="bg-orange-400" />
                 </div>
               )}
@@ -302,6 +306,36 @@ export default function SenderAccounts() {
           ))}
         </div>
       )}
+      <div className="mt-8 grid gap-4 lg:grid-cols-3" data-testid="deliverability-guide">
+        <div className="rounded-xl border border-border bg-panel p-6 lg:col-span-2">
+          <p className="text-xs font-medium text-primary">Deliverability checklist</p>
+          <h2 className="mt-1 font-heading text-lg font-semibold text-foreground">Before you send from a new domain</h2>
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+            {[
+              ["SPF record", "Authorize your mail provider: v=spf1 include:_spf.google.com ~all"],
+              ["DKIM signing", "Enable DKIM in Google Workspace / Microsoft 365 and publish the TXT key."],
+              ["DMARC policy", "Start with v=DMARC1; p=none; rua=mailto:dmarc@yourdomain.com"],
+              ["Custom tracking domain", "Point a subdomain (e.g. track.yourdomain.com) at this app for opens & clicks."],
+              ["Warm-up ramp", "Keep warm-up on for 2–3 weeks; start at 5/day, +3/day."],
+              ["Separate sending domain", "Use lookalike domains (getbrand.com) so your main domain stays clean."],
+            ].map(([t, b]) => (
+              <li key={t} className="flex gap-3 rounded-lg border border-border bg-background p-3">
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-300" />
+                <div><p className="text-sm font-medium text-foreground">{t}</p><p className="mt-0.5 font-mono text-[11px] leading-relaxed text-muted-foreground">{b}</p></div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-xl border border-border bg-gradient-to-b from-primary/[0.07] to-panel p-6">
+          <p className="text-xs font-medium text-primary">Recommended limits</p>
+          <h2 className="mt-1 font-heading text-lg font-semibold text-foreground">Healthy sending volume</h2>
+          <div className="mt-4 space-y-3 text-sm">
+            {[["Week 1", "5–15 / day"], ["Week 2", "15–30 / day"], ["Week 3+", "30–50 / day"], ["Gap between sends", "8–15 min"], ["Inboxes per domain", "2–3 max"]].map(([a, b]) => (
+              <div key={a} className="flex items-center justify-between border-b border-border/60 pb-2 last:border-0"><span className="text-muted-foreground">{a}</span><span className="font-mono text-foreground">{b}</span></div>
+            ))}
+          </div>
+        </div>
+      </div>
       <AddSenderDialog open={open} onOpenChange={setOpen} />
       <EditLimitsDialog sender={editing} onClose={() => setEditing(null)} />
     </AppShell>

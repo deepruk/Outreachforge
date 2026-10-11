@@ -12,17 +12,17 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-xl border border-[#1E293B] bg-panel p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-slate-700 motion-reduce:transform-none",
+        "group relative overflow-hidden rounded-xl border border-border bg-panel p-4 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-slate-700 motion-reduce:transform-none",
         className,
       )}
       data-testid={testId}
     >
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-400">{label}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{label}</p>
         {Icon && <Icon className={cn("size-4", accent)} />}
       </div>
-      <p className="mt-3 font-mono text-[26px] font-semibold leading-none tracking-tight text-white" data-testid={`${testId}-value`}>{value}</p>
-      {sub && <p className="mt-2 text-xs text-slate-500">{sub}</p>}
+      <p className="mt-3 font-mono text-[26px] font-semibold leading-none tracking-tight text-foreground" data-testid={`${testId}-value`}>{value}</p>
+      {sub && <p className="mt-2 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -38,7 +38,7 @@ export function Pill({ cls, children, testId, dot }: { cls: string; children: Re
 
 export function RateBar({ value, color = "bg-blue-500" }: { value: number; color?: string }) {
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#1E293B]">
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
       <div className={cn("h-full rounded-full transition-[width] duration-500", color)} style={{ width: `${Math.min(100, value)}%` }} />
     </div>
   );
@@ -46,12 +46,12 @@ export function RateBar({ value, color = "bg-blue-500" }: { value: number; color
 
 export function EmptyState({ icon: Icon, title, body, action, testId }: { icon: LucideIcon; title: string; body: string; action?: ReactNode; testId: string }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[#263247] bg-panel/50 px-6 py-14 text-center" data-testid={testId}>
-      <div className="grid size-12 place-items-center rounded-xl bg-[#1E293B]">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-input bg-panel/50 px-6 py-14 text-center" data-testid={testId}>
+      <div className="grid size-12 place-items-center rounded-xl bg-secondary">
         <Icon className="size-5 text-cyan" />
       </div>
-      <h3 className="mt-4 font-heading text-lg font-semibold text-white">{title}</h3>
-      <p className="mt-1 max-w-sm text-sm text-slate-400">{body}</p>
+      <h3 className="mt-4 font-heading text-lg font-semibold text-foreground">{title}</h3>
+      <p className="mt-1 max-w-sm text-sm text-muted-foreground">{body}</p>
       {action && <div className="mt-5">{action}</div>}
     </div>
   );
@@ -75,17 +75,17 @@ export function PerformanceChart({ data, visible, height = 280 }: { data: Series
           <defs>
             {SERIES.map((s) => (
               <linearGradient key={s.key} id={`g-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={s.color} stopOpacity={0.35} />
+                <stop offset="0%" stopColor={s.color} stopOpacity={0.28} />
                 <stop offset="100%" stopColor={s.color} stopOpacity={0} />
               </linearGradient>
             ))}
           </defs>
-          <CartesianGrid stroke="#1E293B" strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="date" tickFormatter={fmtDate} stroke="#475569" fontSize={11} tickLine={false} axisLine={false} minTickGap={24} />
-          <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+          <CartesianGrid stroke="#94A3B8" strokeOpacity={0.18} strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="date" tickFormatter={fmtDate} stroke="#71717A" fontSize={11} tickLine={false} axisLine={false} minTickGap={24} />
+          <YAxis stroke="#71717A" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
           <Tooltip
-            contentStyle={{ background: "#0F172A", border: "1px solid #1E293B", borderRadius: 10, fontSize: 12 }}
-            labelStyle={{ color: "#E2E8F0", fontWeight: 600 }}
+            contentStyle={{ background: "var(--popover)", color: "var(--popover-foreground)", border: "1px solid var(--border)", boxShadow: "0 8px 30px rgba(0,0,0,.18)", borderRadius: 10, fontSize: 12 }}
+            labelStyle={{ color: "var(--popover-foreground)", fontWeight: 600 }}
             labelFormatter={(label: string) => fmtDate(label)}
           />
           {SERIES.filter((s) => visible.includes(s.key)).map((s) => (
@@ -110,10 +110,10 @@ export function SeriesToggles({ visible, onChange }: { visible: SeriesKey[]; onC
             onClick={() => onChange(on ? visible.filter((k) => k !== s.key) : [...visible, s.key])}
             className={cn(
               "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors duration-150",
-              on ? "border-slate-600 bg-[#1E293B] text-slate-100" : "border-[#1E293B] text-slate-500 hover:text-slate-300",
+              on ? "border-slate-600 bg-secondary text-foreground" : "border-border text-muted-foreground hover:text-foreground/75",
             )}
           >
-            <span className="size-2 rounded-full" style={{ background: on ? s.color : "#334155" }} />
+            <span className="size-2 rounded-full" style={{ background: on ? s.color : "#A1A1AA" }} />
             {s.label}
           </button>
         );
@@ -124,10 +124,10 @@ export function SeriesToggles({ visible, onChange }: { visible: SeriesKey[]; onC
 
 export function Panel({ title, action, children, className, testId }: { title?: ReactNode; action?: ReactNode; children: ReactNode; className?: string; testId?: string }) {
   return (
-    <section className={cn("rounded-xl border border-[#1E293B] bg-panel", className)} data-testid={testId}>
+    <section className={cn("rounded-xl border border-border bg-panel", className)} data-testid={testId}>
       {(title || action) && (
-        <div className="flex items-center justify-between gap-3 border-b border-[#1E293B] px-5 py-3.5">
-          {title && <h2 className="font-heading text-[15px] font-semibold text-white">{title}</h2>}
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+          {title && <h2 className="font-heading text-[15px] font-semibold text-foreground">{title}</h2>}
           {action}
         </div>
       )}

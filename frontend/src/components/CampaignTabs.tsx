@@ -150,14 +150,14 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
         onDrop={onDrop}
         className={cn(
           "flex flex-col items-center gap-4 rounded-xl border border-dashed p-6 text-center transition-colors duration-150 sm:flex-row sm:text-left",
-          drag ? "border-cyan-400 bg-cyan-500/5" : "border-[#263247] bg-panel",
+          drag ? "border-cyan-400 bg-cyan-500/5" : "border-input bg-panel",
         )}
         data-testid="csv-dropzone"
       >
-        <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-[#1E293B]"><FileUp className="size-5 text-cyan" /></div>
+        <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-secondary"><FileUp className="size-5 text-cyan" /></div>
         <div className="flex-1">
-          <p className="font-medium text-slate-100">Import leads from CSV</p>
-          <p className="text-sm text-slate-400">Drag a file here. Columns: <span className="font-mono text-xs text-slate-300">email, first_name, last_name, company, title</span> — any extra column becomes a <span className="font-mono text-xs text-cyan">{"{{variable}}"}</span></p>
+          <p className="font-medium text-foreground">Import leads from CSV</p>
+          <p className="text-sm text-muted-foreground">Drag a file here. Columns: <span className="font-mono text-xs text-foreground/75">email, first_name, last_name, company, title</span> — any extra column becomes a <span className="font-mono text-xs text-cyan">{"{{variable}}"}</span></p>
         </div>
         <input ref={fileRef} type="file" accept=".csv,text/csv,.txt" className="hidden" onChange={onFile} data-testid="csv-file-input" />
         <div className="flex gap-2">
@@ -167,11 +167,11 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
       </div>
 
       <Panel
-        title={<span>Leads <span className="ml-1 font-mono text-xs text-slate-500">{rows.length}</span></span>}
+        title={<span>Leads <span className="ml-1 font-mono text-xs text-muted-foreground">{rows.length}</span></span>}
         action={
           <div className="flex items-center gap-2">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-500" />
+              <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="h-8 w-40 pl-8 text-xs sm:w-56" data-testid="lead-search-input" />
             </div>
             <Select value={status} onValueChange={(v: string) => setStatus(v)}>
@@ -189,8 +189,8 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
       >
         <div className="max-h-[560px] overflow-auto scroll-thin">
           <table className="w-full text-sm" data-testid="leads-table">
-            <thead className="sticky top-0 bg-panel text-left text-[11px] uppercase tracking-[0.07em] text-slate-500">
-              <tr className="border-b border-[#1E293B]">
+            <thead className="sticky top-0 bg-panel text-left text-[11px] uppercase tracking-[0.07em] text-muted-foreground">
+              <tr className="border-b border-border">
                 <th className="px-5 py-2.5 font-semibold">Contact</th>
                 <th className="px-3 py-2.5 font-semibold">Company</th>
                 <th className="px-3 py-2.5 font-semibold">Status</th>
@@ -202,39 +202,39 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
             </thead>
             <tbody>
               {rows.map((l) => (
-                <tr key={l.id} className="border-b border-[#1E293B]/70 transition-colors hover:bg-white/[0.02]" data-testid={`lead-row-${l.id}`}>
+                <tr key={l.id} className="border-b border-border/70 transition-colors hover:bg-foreground/[0.02]" data-testid={`lead-row-${l.id}`}>
                   <td className="px-5 py-2.5">
-                    <p className="font-medium text-slate-100">{`${l.first_name} ${l.last_name}`.trim() || "—"}</p>
-                    <p className="font-mono text-xs text-slate-500">{l.email}</p>
-                    {l.timezone && <p className="font-mono text-[10px] text-slate-600" data-testid={`lead-timezone-${l.id}`}>{l.timezone}</p>}
+                    <p className="font-medium text-foreground">{`${l.first_name} ${l.last_name}`.trim() || "—"}</p>
+                    <p className="font-mono text-xs text-muted-foreground">{l.email}</p>
+                    {l.timezone && <p className="font-mono text-[10px] text-muted-foreground/70" data-testid={`lead-timezone-${l.id}`}>{l.timezone}</p>}
                   </td>
-                  <td className="px-3 py-2.5 text-slate-300">
-                    {l.company || "—"}<p className="text-xs text-slate-500">{l.title}</p>
+                  <td className="px-3 py-2.5 text-foreground/75">
+                    {l.company || "—"}<p className="text-xs text-muted-foreground">{l.title}</p>
                     {Object.keys(l.custom ?? {}).length > 0 && (
-                      <p className="mt-0.5 max-w-[220px] truncate font-mono text-[10px] text-slate-500" data-testid={`lead-custom-${l.id}`}>
+                      <p className="mt-0.5 max-w-[220px] truncate font-mono text-[10px] text-muted-foreground" data-testid={`lead-custom-${l.id}`}>
                         {Object.entries(l.custom).map(([k, v]) => `${k}: ${v}`).join(" · ")}
                       </p>
                     )}
                   </td>
                   <td className="px-3 py-2.5"><Pill cls={LEAD_STATUS[l.status].cls}>{LEAD_STATUS[l.status].label}</Pill></td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-slate-400">{Math.min(l.current_step, campaign.steps.length)}/{campaign.steps.length}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{Math.min(l.current_step, campaign.steps.length)}/{campaign.steps.length}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex gap-1">
                       {l.opened && <Pill cls="border-sky-500/30 bg-sky-500/10 text-sky-300">Opened</Pill>}
                       {l.clicked && <Pill cls="border-amber-500/30 bg-amber-500/10 text-amber-300">Clicked</Pill>}
-                      {!l.opened && !l.clicked && <span className="text-xs text-slate-600">—</span>}
+                      {!l.opened && !l.clicked && <span className="text-xs text-muted-foreground/70">—</span>}
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 font-mono text-xs text-slate-400">{timeAgo(l.last_sent_at)}</td>
+                  <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{timeAgo(l.last_sent_at)}</td>
                   <td className="px-3 py-2.5 text-right">
                     <Button variant="ghost" size="icon-xs" onClick={() => del.mutate(l.id)} data-testid={`lead-delete-${l.id}`} aria-label="Remove lead">
-                      <Trash2 className="size-3.5 text-slate-500" />
+                      <Trash2 className="size-3.5 text-muted-foreground" />
                     </Button>
                   </td>
                 </tr>
               ))}
               {leads.data && rows.length === 0 && (
-                <tr><td colSpan={7} className="px-5 py-12 text-center text-sm text-slate-500" data-testid="leads-empty">No leads yet — upload a CSV to get started.</td></tr>
+                <tr><td colSpan={7} className="px-5 py-12 text-center text-sm text-muted-foreground" data-testid="leads-empty">No leads yet — upload a CSV to get started.</td></tr>
               )}
             </tbody>
           </table>
@@ -249,14 +249,14 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
               From <span className="font-mono">{preview?.file}</span>{preview?.invalid ? ` · ${preview.invalid} rows skipped (invalid email)` : ""}. Duplicates and unsubscribed contacts are handled automatically.
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-72 overflow-auto rounded-lg border border-[#1E293B] scroll-thin">
+          <div className="max-h-72 overflow-auto rounded-lg border border-border scroll-thin">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-[#161F30] text-left text-slate-400">
+              <thead className="sticky top-0 bg-muted text-left text-muted-foreground">
                 <tr>{["Email", "First", "Last", "Company", "Title", "Timezone", ...(preview?.customCols ?? [])].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}</tr>
               </thead>
               <tbody>
                 {preview?.leads.slice(0, 50).map((l, i) => (
-                  <tr key={i} className="border-t border-[#1E293B]">
+                  <tr key={i} className="border-t border-border">
                     <td className="px-3 py-1.5 font-mono">{l.email}</td><td className="px-3 py-1.5">{l.first_name}</td>
                     <td className="px-3 py-1.5">{l.last_name}</td><td className="px-3 py-1.5">{l.company}</td><td className="px-3 py-1.5">{l.title}</td><td className="px-3 py-1.5 font-mono">{l.timezone}</td>
                     {preview.customCols.map((c) => <td key={c} className="px-3 py-1.5">{l.custom[c] ?? ""}</td>)}
@@ -266,9 +266,9 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
             </table>
           </div>
           {!!preview?.customCols.length && (
-            <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400" data-testid="csv-custom-columns">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground" data-testid="csv-custom-columns">
               Custom variables detected:
-              {preview.customCols.map((c) => <span key={c} className="rounded-md border border-[#263247] bg-[#161F30] px-1.5 py-0.5 font-mono text-cyan">{`{{${c}}}`}</span>)}
+              {preview.customCols.map((c) => <span key={c} className="rounded-md border border-input bg-muted px-1.5 py-0.5 font-mono text-cyan">{`{{${c}}}`}</span>)}
             </div>
           )}
           <DialogFooter>
@@ -379,8 +379,8 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
         {steps.map((s, i) => (
           <div key={s.id}>
             {i > 0 && (
-              <div className="flex items-center gap-2 py-1.5 pl-5 text-xs text-slate-500">
-                <Clock className="size-3.5" /> Wait <span className="font-mono text-slate-300">{s.delay_days}</span> day{s.delay_days === 1 ? "" : "s"}
+              <div className="flex items-center gap-2 py-1.5 pl-5 text-xs text-muted-foreground">
+                <Clock className="size-3.5" /> Wait <span className="font-mono text-foreground/75">{s.delay_days}</span> day{s.delay_days === 1 ? "" : "s"}
               </div>
             )}
             <button
@@ -388,7 +388,7 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
               onClick={() => setActive(i)}
               className={cn(
                 "w-full rounded-xl border p-4 text-left transition-[border-color,background-color] duration-150",
-                i === active ? "border-blue-500/60 bg-blue-600/10" : "border-[#1E293B] bg-panel hover:border-slate-700",
+                i === active ? "border-blue-500/60 bg-blue-600/10" : "border-border bg-panel hover:border-foreground/20",
               )}
               data-testid={`sequence-step-${i}`}
             >
@@ -398,13 +398,13 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
                   {s.subject_b.trim() && <span className="rounded bg-amber-500/15 px-1.5 py-px text-[10px] text-amber-300" data-testid={`sequence-step-ab-badge-${i}`}>A/B{s.ab_winner ? ` · ${s.ab_winner.toUpperCase()} won` : ""}</span>}
                 </span>
                 {steps.length > 1 && (
-                  <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); remove(i); }} className="rounded p-1 text-slate-500 hover:bg-white/5 hover:text-red-300" data-testid={`sequence-step-delete-${i}`}>
+                  <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); remove(i); }} className="rounded p-1 text-muted-foreground hover:bg-foreground/5 hover:text-red-300" data-testid={`sequence-step-delete-${i}`}>
                     <Trash2 className="size-3.5" />
                   </span>
                 )}
               </div>
-              <p className="mt-1.5 truncate text-sm font-medium text-slate-100">{s.subject || (i > 0 ? `Re: ${firstSubject}` : "No subject")}</p>
-              <p className="mt-0.5 truncate text-xs text-slate-500">{s.body.replace(/\n/g, " ") || "Empty"}</p>
+              <p className="mt-1.5 truncate text-sm font-medium text-foreground">{s.subject || (i > 0 ? `Re: ${firstSubject}` : "No subject")}</p>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{s.body.replace(/\n/g, " ") || "Empty"}</p>
             </button>
           </div>
         ))}
@@ -427,7 +427,7 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
                 <div className="flex items-center gap-3">
                   <Label className="shrink-0">Send after</Label>
                   <Input type="number" min={0} max={60} value={cur.delay_days} onChange={(e) => patch({ delay_days: Math.max(0, Number(e.target.value) || 0) })} className="w-20" data-testid="step-delay-input" />
-                  <span className="text-sm text-slate-400">days if no reply</span>
+                  <span className="text-sm text-muted-foreground">days if no reply</span>
                 </div>
               )}
               <div className="space-y-1.5">
@@ -445,10 +445,10 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
                 <div className="space-y-1.5 rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-3" data-testid="step-ab-panel">
                   <div className="flex items-center justify-between">
                     <Label>Subject B</Label>
-                    <button type="button" onClick={() => { patch({ subject_b: "", ab_winner: null }); setAbOpen({ ...abOpen, [cur.id]: false }); }} className="text-xs text-slate-500 hover:text-red-300" data-testid="step-remove-ab-button">Remove test</button>
+                    <button type="button" onClick={() => { patch({ subject_b: "", ab_winner: null }); setAbOpen({ ...abOpen, [cur.id]: false }); }} className="text-xs text-muted-foreground hover:text-red-300" data-testid="step-remove-ab-button">Remove test</button>
                   </div>
                   <Input value={cur.subject_b} onChange={(e) => patch({ subject_b: e.target.value })} placeholder="Alternative subject line" data-testid="step-subject-b-input" />
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-muted-foreground">
                     {cur.ab_winner
                       ? <span className="text-emerald-300" data-testid="step-ab-winner">Subject {cur.ab_winner.toUpperCase()} won on open rate — now sent to everyone. Edit a subject to restart the test.</span>
                       : "Leads are split 50/50. After each version reaches 20 sends, the one with the higher open rate is sent to everyone else."}
@@ -460,7 +460,7 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
                   <Label>Body</Label>
                   <div className="flex flex-wrap gap-1">
                     {vars.map((v) => (
-                      <button key={v} type="button" onClick={() => insertVar(`{{${v}}}`)} className="rounded-md border border-[#263247] bg-[#161F30] px-2 py-0.5 font-mono text-[11px] text-cyan transition-colors hover:border-cyan-500/50" data-testid={`insert-var-${v}`}>
+                      <button key={v} type="button" onClick={() => insertVar(`{{${v}}}`)} className="rounded-md border border-input bg-muted px-2 py-0.5 font-mono text-[11px] text-cyan transition-colors hover:border-cyan-500/50" data-testid={`insert-var-${v}`}>
                         {`{{${v}}}`}
                       </button>
                     ))}
@@ -470,7 +470,7 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
                   </div>
                 </div>
                 <Textarea ref={bodyRef} value={cur.body} onChange={(e) => patch({ body: e.target.value })} onBlur={(e) => { lastSel.current = e.currentTarget.selectionStart; }} rows={11} className="font-mono text-[13px] leading-relaxed" data-testid="step-body-input" />
-                <p className="text-xs text-slate-500">Plain text. Use <span className="font-mono">{"{{field|fallback}}"}</span> for a default when a value is empty, and <span className="font-mono text-violet-200">{"{a|b|c}"}</span> spintax so each send picks a random option{countVariants(cur.subject + cur.body) > 1 && <span className="text-violet-200" data-testid="spintax-variant-count"> ({countVariants(cur.subject + cur.subject_b + cur.body).toLocaleString()} combinations)</span>}. Links are tracked when click tracking is on.</p>
+                <p className="text-xs text-muted-foreground">Plain text. Use <span className="font-mono">{"{{field|fallback}}"}</span> for a default when a value is empty, and <span className="font-mono text-violet-200">{"{a|b|c}"}</span> spintax so each send picks a random option{countVariants(cur.subject + cur.body) > 1 && <span className="text-violet-200" data-testid="spintax-variant-count"> ({countVariants(cur.subject + cur.subject_b + cur.body).toLocaleString()} combinations)</span>}. Links are tracked when click tracking is on.</p>
               </div>
             </div>
           </Panel>
@@ -482,10 +482,10 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
               <div className="flex items-center gap-2">
                 <Button type="button" variant="ghost" size="xs" onClick={() => setShuffle((x) => x + 1)} data-testid="preview-shuffle-button"><Shuffle className="size-3.5" />Shuffle</Button>
                 {cur.subject_b.trim() && (
-              <div className="flex gap-1 rounded-md border border-[#1E293B] p-0.5">
+              <div className="flex gap-1 rounded-md border border-border p-0.5">
                 {[false, true].map((b) => (
                   <button key={String(b)} type="button" onClick={() => setPreviewB(b)} data-testid={`preview-variant-${b ? "b" : "a"}`}
-                    className={cn("rounded px-2 py-0.5 text-xs", previewB === b ? "bg-[#1E293B] text-white" : "text-slate-500")}>{b ? "B" : "A"}</button>
+                    className={cn("rounded px-2 py-0.5 text-xs", previewB === b ? "bg-secondary text-foreground" : "text-muted-foreground")}>{b ? "B" : "A"}</button>
                 ))}
               </div>
                 )}
@@ -494,11 +494,11 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
             testId="sequence-preview"
           >
             <div className="p-5 text-sm">
-              <p className="text-xs text-slate-500">To: <span className="font-mono text-slate-300">{SAMPLE.email}</span></p>
-              <p className="mt-1 font-medium text-white" data-testid="preview-subject">{render(previewB && cur.subject_b.trim() ? cur.subject_b : cur.subject) || `Re: ${render(firstSubject)}`}</p>
-              <div className="mt-4 whitespace-pre-wrap rounded-lg border border-[#1E293B] bg-[#0B0F17] p-4 leading-relaxed text-slate-300" data-testid="preview-body">
+              <p className="text-xs text-muted-foreground">To: <span className="font-mono text-foreground/75">{SAMPLE.email}</span></p>
+              <p className="mt-1 font-medium text-foreground" data-testid="preview-subject">{render(previewB && cur.subject_b.trim() ? cur.subject_b : cur.subject) || `Re: ${render(firstSubject)}`}</p>
+              <div className="mt-4 whitespace-pre-wrap rounded-lg border border-border bg-background p-4 leading-relaxed text-foreground/75" data-testid="preview-body">
                 {render(cur.body)}
-                {campaign.include_unsubscribe && !cur.body.includes("unsubscribe_link") && <span className="text-slate-500">{"\n\n--\nNot interested? Unsubscribe here: https://…/unsubscribe"}</span>}
+                {campaign.include_unsubscribe && !cur.body.includes("unsubscribe_link") && <span className="text-muted-foreground">{"\n\n--\nNot interested? Unsubscribe here: https://…/unsubscribe"}</span>}
               </div>
             </div>
           </Panel>
@@ -547,21 +547,21 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
       <div className="space-y-6 lg:col-span-7">
       <Panel title="Sender rotation" testId="settings-senders-panel">
         <div className="p-5">
-          <p className="mb-4 text-sm text-slate-400">Emails rotate across selected inboxes. Each lead keeps the same inbox for every follow-up.</p>
+          <p className="mb-4 text-sm text-muted-foreground">Emails rotate across selected inboxes. Each lead keeps the same inbox for every follow-up.</p>
           <ul className="space-y-2">
             {(senders.data ?? []).map((x) => (
               <li key={x.id}>
-                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#1E293B] bg-[#0B0F17] px-4 py-3 transition-colors hover:border-slate-700">
+                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 transition-colors hover:border-foreground/20">
                   <Checkbox checked={s.sender_ids.includes(x.id)} onCheckedChange={(v) => toggleSender(x.id, !!v)} data-testid={`settings-sender-checkbox-${x.id}`} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-mono text-sm text-slate-200">{x.email}</p>
-                    <p className="text-xs text-slate-500">{x.from_name || "No display name"} · {x.daily_limit}/day</p>
+                    <p className="truncate font-mono text-sm text-foreground/90">{x.email}</p>
+                    <p className="text-xs text-muted-foreground">{x.from_name || "No display name"} · {x.daily_limit}/day</p>
                   </div>
                   {x.status === "error" && <Pill cls="border-red-500/30 bg-red-500/10 text-red-300">Error</Pill>}
                 </label>
               </li>
             ))}
-            {senders.data?.length === 0 && <li className="text-sm text-slate-500">No sender accounts connected yet.</li>}
+            {senders.data?.length === 0 && <li className="text-sm text-muted-foreground">No sender accounts connected yet.</li>}
           </ul>
         </div>
       </Panel>
@@ -574,7 +574,7 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
                   const on = s.send_days.includes(i);
                   return (
                     <button key={d} type="button" onClick={() => setS({ ...s, send_days: on ? s.send_days.filter((x) => x !== i) : [...s.send_days, i].sort() })}
-                      className={cn("h-9 w-12 rounded-lg border text-xs font-semibold transition-colors duration-150", on ? "border-blue-500/60 bg-blue-600/15 text-white" : "border-[#1E293B] text-slate-500 hover:border-slate-700")}
+                      className={cn("h-9 w-12 rounded-lg border text-xs font-semibold transition-colors duration-150", on ? "border-blue-500/60 bg-blue-600/15 text-white" : "border-border text-muted-foreground hover:border-foreground/20")}
                       data-testid={`settings-day-${i}`} aria-pressed={on}>
                       {d}
                     </button>
@@ -583,7 +583,7 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
               </div>
               <div className="flex gap-3 text-xs">
                 <button type="button" className="text-cyan hover:underline" onClick={() => setS({ ...s, send_days: [0, 1, 2, 3, 4] })} data-testid="settings-days-weekdays">Weekdays only</button>
-                <button type="button" className="text-slate-400 hover:underline" onClick={() => setS({ ...s, send_days: [0, 1, 2, 3, 4, 5, 6] })} data-testid="settings-days-all">Every day</button>
+                <button type="button" className="text-muted-foreground hover:underline" onClick={() => setS({ ...s, send_days: [0, 1, 2, 3, 4, 5, 6] })} data-testid="settings-days-all">Every day</button>
               </div>
               {s.send_days.length === 0 && <p className="text-xs text-red-300">Pick at least one day — nothing will send otherwise.</p>}
             </div>
@@ -603,36 +603,36 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
                 </Select>
               </div>
             </div>
-            <div className="space-y-2 rounded-lg border border-[#1E293B] bg-[#0B0F17] p-4" data-testid="settings-random-start-section">
-              <p className="flex items-center gap-1.5 text-sm font-medium text-slate-100"><Shuffle className="size-4 text-cyan" />Random daily start</p>
-              <p className="text-xs text-slate-500">Each inbox starts its sending day up to this many minutes after "Send from" — a different random time every day.</p>
+            <div className="space-y-2 rounded-lg border border-border bg-background p-4" data-testid="settings-random-start-section">
+              <p className="flex items-center gap-1.5 text-sm font-medium text-foreground"><Shuffle className="size-4 text-cyan" />Random daily start</p>
+              <p className="text-xs text-muted-foreground">Each inbox starts its sending day up to this many minutes after "Send from" — a different random time every day.</p>
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                <span className="text-sm text-slate-400">Up to</span>
+                <span className="text-sm text-muted-foreground">Up to</span>
                 <Input type="number" min={0} max={180} value={s.random_start_minutes} onChange={(e) => setS({ ...s, random_start_minutes: Math.min(180, Math.max(0, Number(e.target.value) || 0)) })} className="w-20" data-testid="settings-random-start-input" />
-                <span className="text-sm text-slate-400">minutes late</span>
+                <span className="text-sm text-muted-foreground">minutes late</span>
                 {[0, 15, 30, 60].map((m) => (
                   <button key={m} type="button" onClick={() => setS({ ...s, random_start_minutes: m })}
-                    className={cn("rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors", s.random_start_minutes === m ? "border-cyan-500/50 bg-cyan-500/10 text-cyan" : "border-[#263247] text-slate-400 hover:text-slate-200")}
+                    className={cn("rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors", s.random_start_minutes === m ? "border-cyan-500/50 bg-cyan-500/10 text-cyan" : "border-input text-muted-foreground hover:text-foreground/90")}
                     data-testid={`settings-random-start-preset-${m}`}>{m === 0 ? "Off" : `${m}m`}</button>
                 ))}
               </div>
-              <p className="text-xs text-slate-400" data-testid="settings-random-start-summary">
+              <p className="text-xs text-muted-foreground" data-testid="settings-random-start-summary">
                 {s.random_start_minutes ? `Inboxes start between ${hourLabel(s.send_start_hour)} and ${String(s.send_start_hour + Math.floor(s.random_start_minutes / 60)).padStart(2, "0")}:${String(s.random_start_minutes % 60).padStart(2, "0")}.` : `All inboxes start exactly at ${hourLabel(s.send_start_hour)}.`}
               </p>
             </div>
-            <div className="space-y-2 rounded-lg border border-[#1E293B] bg-[#0B0F17] p-4" data-testid="settings-gap-section">
-              <p className="flex items-center gap-1.5 text-sm font-medium text-slate-100"><Timer className="size-4 text-cyan" />Gap between emails</p>
-              <p className="text-xs text-slate-500">After each email, that inbox waits a random time in this range before sending the next one, so sending looks human.</p>
+            <div className="space-y-2 rounded-lg border border-border bg-background p-4" data-testid="settings-gap-section">
+              <p className="flex items-center gap-1.5 text-sm font-medium text-foreground"><Timer className="size-4 text-cyan" />Gap between emails</p>
+              <p className="text-xs text-muted-foreground">After each email, that inbox waits a random time in this range before sending the next one, so sending looks human.</p>
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <Input type="number" min={0} max={240} value={s.gap_min_minutes} onChange={(e) => setS({ ...s, gap_min_minutes: Math.min(240, Math.max(0, Number(e.target.value) || 0)) })} className="w-20" data-testid="settings-gap-min-input" />
-                <span className="text-sm text-slate-400">to</span>
+                <span className="text-sm text-muted-foreground">to</span>
                 <Input type="number" min={0} max={240} value={s.gap_max_minutes} onChange={(e) => setS({ ...s, gap_max_minutes: Math.min(240, Math.max(0, Number(e.target.value) || 0)) })} className="w-20" data-testid="settings-gap-max-input" />
-                <span className="text-sm text-slate-400">minutes</span>
+                <span className="text-sm text-muted-foreground">minutes</span>
               </div>
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {[[2, 5], [5, 10], [10, 15], [15, 30]].map(([a, b]) => (
                   <button key={a} type="button" onClick={() => setS({ ...s, gap_min_minutes: a, gap_max_minutes: b })}
-                    className={cn("rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors", s.gap_min_minutes === a && s.gap_max_minutes === b ? "border-cyan-500/50 bg-cyan-500/10 text-cyan" : "border-[#263247] text-slate-400 hover:text-slate-200")}
+                    className={cn("rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors", s.gap_min_minutes === a && s.gap_max_minutes === b ? "border-cyan-500/50 bg-cyan-500/10 text-cyan" : "border-input text-muted-foreground hover:text-foreground/90")}
                     data-testid={`settings-gap-preset-${a}-${b}`}>{a}–{b} min</button>
                 ))}
               </div>
@@ -641,7 +641,7 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
                 const avg = (s.gap_min_minutes + s.gap_max_minutes) / 2;
                 const hrs = s.send_end_hour - s.send_start_hour;
                 const per = avg > 0 ? Math.floor((hrs * 60) / avg) : null;
-                return <p className="text-xs text-slate-400" data-testid="settings-gap-summary">{per === null ? "No gap — inboxes send as fast as the engine runs." : `≈ ${per} emails per inbox per day max in a ${hrs}h window (×${s.sender_ids.length} inboxes).`}</p>;
+                return <p className="text-xs text-muted-foreground" data-testid="settings-gap-summary">{per === null ? "No gap — inboxes send as fast as the engine runs." : `≈ ${per} emails per inbox per day max in a ${hrs}h window (×${s.sender_ids.length} inboxes).`}</p>;
               })()}
             </div>
             <div className="space-y-1.5">
@@ -651,14 +651,14 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
                 <SelectContent className="max-h-72">{TIMEZONES.map((z) => <SelectItem key={z} value={z}>{tzLabel(z)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-[#1E293B] bg-[#0B0F17] p-4">
+            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-border bg-background p-4">
               <div>
-                <p className="flex items-center gap-1.5 text-sm font-medium text-slate-100"><Globe className="size-4 text-cyan" />Send in each lead's timezone</p>
-                <p className="mt-0.5 text-xs text-slate-500">Uses the <span className="font-mono">timezone</span> CSV column (e.g. America/New_York). Leads without one fall back to the campaign timezone.</p>
+                <p className="flex items-center gap-1.5 text-sm font-medium text-foreground"><Globe className="size-4 text-cyan" />Send in each lead's timezone</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Uses the <span className="font-mono">timezone</span> CSV column (e.g. America/New_York). Leads without one fall back to the campaign timezone.</p>
               </div>
               <Switch checked={s.use_lead_timezone} onCheckedChange={(v) => setS({ ...s, use_lead_timezone: v })} data-testid="settings-use_lead_timezone-switch" />
             </label>
-            <p className="rounded-lg bg-[#161F30] px-3 py-2 text-xs text-slate-400" data-testid="settings-calendar-summary">
+            <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground" data-testid="settings-calendar-summary">
               Sends {s.send_days.length === 7 ? "every day" : s.send_days.length === 0 ? "never" : DAYS.filter((_, i) => s.send_days.includes(i)).join(", ")} between {hourLabel(s.send_start_hour)} and {hourLabel(s.send_end_hour)} {s.use_lead_timezone ? "in each lead's local time" : tzLabel(s.timezone)}.
             </p>
           </div>
@@ -672,7 +672,7 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
           </div>
         </Panel>
         <Panel title="Tracking & behaviour" testId="settings-tracking-panel">
-          <div className="divide-y divide-[#1E293B]">
+          <div className="divide-y divide-border">
             {([
               ["track_opens", "Track opens", "Adds an invisible 1px image to each email"],
               ["track_clicks", "Track clicks", "Rewrites links through a redirect"],
@@ -680,7 +680,7 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
               ["include_unsubscribe", "Unsubscribe link", "Append a one-click opt-out link + List-Unsubscribe header"],
             ] as const).map(([k, l, d]) => (
               <label key={k} className="flex cursor-pointer items-center justify-between gap-4 px-5 py-3.5">
-                <div><p className="text-sm font-medium text-slate-100">{l}</p><p className="text-xs text-slate-500">{d}</p></div>
+                <div><p className="text-sm font-medium text-foreground">{l}</p><p className="text-xs text-muted-foreground">{d}</p></div>
                 <Switch checked={s[k]} onCheckedChange={(v) => setS({ ...s, [k]: v })} data-testid={`settings-${k}-switch`} />
               </label>
             ))}

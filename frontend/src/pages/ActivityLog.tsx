@@ -65,29 +65,29 @@ export default function ActivityLog() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-12">
-        <Panel className="lg:col-span-8" title="Sent emails" action={<span className="font-mono text-xs text-slate-500">{d?.items.length ?? 0} latest</span>} testId="activity-feed-panel">
+        <Panel className="lg:col-span-8" title="Sent emails" action={<span className="font-mono text-xs text-muted-foreground">{d?.items.length ?? 0} latest</span>} testId="activity-feed-panel">
           {d && d.items.length === 0 ? (
             <div className="p-5"><EmptyState icon={Activity} testId="activity-empty" title="Nothing sent yet" body="Once a campaign is launched, every email the engine sends shows up here in real time." /></div>
           ) : (
             <ol className="max-h-[calc(100vh-20rem)] min-h-[300px] overflow-y-auto scroll-thin" data-testid="activity-feed">
               {(d?.items ?? []).map((it, i) => (
-                <li key={it.id} className="relative flex gap-4 border-b border-[#1E293B]/60 px-5 py-3 transition-colors hover:bg-white/[0.02] animate-fade-up" style={{ animationDelay: `${Math.min(i, 10) * 25}ms` }} data-testid={`activity-item-${it.id}`}>
+                <li key={it.id} className="relative flex gap-4 border-b border-border/60 px-5 py-3 transition-colors hover:bg-foreground/[0.02] animate-fade-up" style={{ animationDelay: `${Math.min(i, 10) * 25}ms` }} data-testid={`activity-item-${it.id}`}>
                   <div className="w-16 shrink-0 pt-0.5 text-right">
-                    <p className="font-mono text-[11px] text-slate-300">{clock(it.sent_at)}</p>
-                    <p className="font-mono text-[10px] text-slate-600">{timeAgo(it.sent_at)}</p>
+                    <p className="font-mono text-[11px] text-foreground/75">{clock(it.sent_at)}</p>
+                    <p className="font-mono text-[10px] text-muted-foreground/70">{timeAgo(it.sent_at)}</p>
                   </div>
                   <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", it.replied ? "bg-emerald-400" : it.bounced ? "bg-red-400" : it.clicked ? "bg-amber-400" : it.opened ? "bg-sky-400" : "bg-blue-600")} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-slate-100">
+                    <p className="truncate text-sm text-foreground">
                       <span className="font-mono text-cyan">{it.sender_email}</span>
-                      <span className="text-slate-500"> → </span>
+                      <span className="text-muted-foreground"> → </span>
                       <span className="font-medium">{it.lead_name || it.to_email}</span>
-                      {it.lead_name && <span className="font-mono text-xs text-slate-500"> {it.to_email}</span>}
+                      {it.lead_name && <span className="font-mono text-xs text-muted-foreground"> {it.to_email}</span>}
                     </p>
-                    <p className="truncate text-xs text-slate-400">{it.subject}</p>
+                    <p className="truncate text-xs text-muted-foreground">{it.subject}</p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      <Link to={`/campaigns/${it.campaign_id}`} className="text-[11px] text-slate-500 hover:text-cyan">{it.campaign_name}</Link>
-                      <Pill cls="border-slate-600/50 bg-slate-700/30 text-slate-300">Step {it.step}{it.variant === "b" ? " · B" : ""}</Pill>
+                      <Link to={`/campaigns/${it.campaign_id}`} className="text-[11px] text-muted-foreground hover:text-cyan">{it.campaign_name}</Link>
+                      <Pill cls="border-border bg-secondary text-muted-foreground">Step {it.step}{it.variant === "b" ? " · B" : ""}</Pill>
                       {it.opened && <Pill cls="border-sky-500/30 bg-sky-500/10 text-sky-300">Opened</Pill>}
                       {it.clicked && <Pill cls="border-amber-500/30 bg-amber-500/10 text-amber-300">Clicked</Pill>}
                       {it.replied && <Pill cls="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">Replied</Pill>}
@@ -96,53 +96,53 @@ export default function ActivityLog() {
                   </div>
                 </li>
               ))}
-              {!d && Array.from({ length: 6 }).map((_, i) => <li key={i} className="m-3 h-12 animate-pulse rounded-lg bg-[#161F30]" />)}
+              {!d && Array.from({ length: 6 }).map((_, i) => <li key={i} className="m-3 h-12 animate-pulse rounded-lg bg-muted" />)}
             </ol>
           )}
         </Panel>
 
         <div className="space-y-6 lg:col-span-4">
           <Panel title="Inbox schedule" testId="activity-inboxes-panel">
-            <ul className="divide-y divide-[#1E293B]">
+            <ul className="divide-y divide-border">
               {(d?.inboxes ?? []).map((ib) => {
                 const cd = countdown(ib.next_available_at, nowMs);
                 const full = ib.sent_today >= ib.effective_limit;
                 return (
                   <li key={ib.id} className="px-5 py-3.5" data-testid={`activity-inbox-${ib.id}`}>
                     <div className="flex items-center justify-between gap-2">
-                      <p className="truncate font-mono text-xs text-slate-200">{ib.email}</p>
+                      <p className="truncate font-mono text-xs text-foreground/90">{ib.email}</p>
                       <Pill cls={SENDER_STATUS[ib.status].cls}>{SENDER_STATUS[ib.status].label}</Pill>
                     </div>
                     <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="text-slate-500">Last sent {timeAgo(ib.last_sent_at)}</span>
+                      <span className="text-muted-foreground">Last sent {timeAgo(ib.last_sent_at)}</span>
                       <span className={cn("font-mono", full ? "text-amber-300" : cd ? "text-cyan" : "text-emerald-300")} data-testid={`activity-inbox-next-${ib.id}`}>
                         {ib.status === "paused" || ib.status === "error" ? "not sending" : full ? "limit reached" : cd ? `next in ${cd}` : "ready"}
                       </span>
                     </div>
                     <div className="mt-2"><RateBar value={(ib.sent_today / Math.max(1, ib.effective_limit)) * 100} color={full ? "bg-amber-400" : "bg-cyan-500"} /></div>
-                    <p className="mt-1 font-mono text-[10px] text-slate-600">{ib.sent_today}/{ib.effective_limit} today</p>
+                    <p className="mt-1 font-mono text-[10px] text-muted-foreground/70">{ib.sent_today}/{ib.effective_limit} today</p>
                   </li>
                 );
               })}
             </ul>
           </Panel>
           <Panel title="Up next" testId="activity-upcoming-panel">
-            <ul className="divide-y divide-[#1E293B]">
+            <ul className="divide-y divide-border">
               {(d?.upcoming ?? []).map((u, i) => {
                 const cd = countdown(u.due_at, nowMs);
                 return (
                   <li key={`${u.lead_email}-${i}`} className="flex items-center justify-between gap-3 px-5 py-2.5" data-testid={`activity-upcoming-${i}`}>
                     <div className="min-w-0">
-                      <p className="truncate text-sm text-slate-200">{u.lead_name || u.lead_email}</p>
-                      <p className="truncate text-[11px] text-slate-500">{u.campaign_name} · step {u.step}</p>
+                      <p className="truncate text-sm text-foreground/90">{u.lead_name || u.lead_email}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{u.campaign_name} · step {u.step}</p>
                     </div>
-                    <span className="shrink-0 font-mono text-[11px] text-slate-400">{cd ? `in ${cd}` : "due now"}</span>
+                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{cd ? `in ${cd}` : "due now"}</span>
                   </li>
                 );
               })}
-              {d && d.upcoming.length === 0 && <li className="px-5 py-8 text-center text-sm text-slate-500">No queued leads in active campaigns.</li>}
+              {d && d.upcoming.length === 0 && <li className="px-5 py-8 text-center text-sm text-muted-foreground">No queued leads in active campaigns.</li>}
             </ul>
-            <p className="border-t border-[#1E293B] px-5 py-2.5 text-[11px] text-slate-500">"Due now" leads go out as soon as an inbox is ready, inside the sending window, gap and daily-start rules.</p>
+            <p className="border-t border-border px-5 py-2.5 text-[11px] text-muted-foreground">"Due now" leads go out as soon as an inbox is ready, inside the sending window, gap and daily-start rules.</p>
           </Panel>
         </div>
       </div>

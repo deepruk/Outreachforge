@@ -39,3 +39,9 @@ Demo user demo@outreachforge.io / Demo@1234; 3 demo senders; 4 campaigns: "Q3 Sa
 ## Iteration 5
 - **Random daily start**: campaign `random_start_minutes` (0–180; new campaigns 30, seed 30). Per inbox per local day a stable offset = sha256(sender_id:date) % (N+1) minutes is added to send_start_hour; engine.sender_started() gates inbox use per lead (in lead/campaign tz).
 - **Activity Log** page `/activity` (nav "Activity Log"): GET /api/activity?campaign_id=&limit= → items (latest sent emails: time, sender inbox → lead, subject, step/variant, opened/clicked/replied/bounced), inboxes (sent_today/effective_limit, last_sent_at, next_available_at from gap), upcoming (next 10 due leads in active campaigns), sent_last_hour. Auto-refresh 10s, live countdowns.
+
+## Iteration 6 — UI/UX overhaul
+- Light + dark themes via next-themes (ThemeProvider in main.tsx, default dark, stored in localStorage "theme"); tokens in index.css (:root light, .dark dark); Geist + Geist Mono fonts. Theme toggle in app top bar, user menu and landing header.
+- AppShell: grouped sidebar (Overview/Outreach/Insights), workspace card, today's sending usage card, breadcrumb, ⌘K command palette (pages, actions, campaigns), "Create" slide-down menu, user avatar menu (theme, logout).
+- Landing: Product/Resources slide-down mega menus, product mock, logo marquee, stats, tabbed product tour, deliverability bento, how-it-works, comparison table, pricing (monthly/annual), testimonials, FAQ accordion, CTA, footer.
+- Dashboard: greeting + onboarding checklist (hidden when complete). Senders: deliverability checklist + recommended limits. `/senders?connect=1` opens the connect dialog.

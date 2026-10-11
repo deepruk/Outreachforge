@@ -52,9 +52,9 @@ export const LEAD_STATUS: Record<LeadStatus, { label: string; cls: string }> = {
 
 export const THREAD_LABEL: Record<ThreadLabel, { label: string; cls: string }> = {
   none: { label: "Unlabeled", cls: "bg-slate-500/10 text-slate-300 border-slate-500/30" },
-  interested: { label: "Interested", cls: "bg-[#064E3B] text-[#A7F3D0] border-emerald-700/50" },
-  meeting_booked: { label: "Meeting booked", cls: "bg-[#1E1B4B] text-[#C7D2FE] border-indigo-700/50" },
-  not_interested: { label: "Not interested", cls: "bg-[#450A0A] text-[#FECACA] border-red-800/50" },
-  out_of_office: { label: "Out of office", cls: "bg-[#451A03] text-[#FED7AA] border-orange-800/50" },
-  wrong_person: { label: "Wrong person", cls: "bg-slate-700/40 text-slate-200 border-slate-600/50" },
+  interested: { label: "Interested", cls: "bg-emerald-500/12 text-emerald-300 border-emerald-500/30" },
+  meeting_booked: { label: "Meeting booked", cls: "bg-indigo-500/12 text-indigo-300 border-indigo-500/30" },
+  not_interested: { label: "Not interested", cls: "bg-red-500/12 text-red-300 border-red-500/30" },
+  out_of_office: { label: "Out of office", cls: "bg-orange-500/12 text-orange-300 border-orange-500/30" },
+  wrong_person: { label: "Wrong person", cls: "bg-slate-500/10 text-slate-300 border-slate-500/30" },
 };

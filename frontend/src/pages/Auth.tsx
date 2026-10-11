@@ -36,22 +36,22 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
 
   return (
     <div className="grid min-h-screen bg-background lg:grid-cols-2">
-      <div className="relative hidden overflow-hidden border-r border-[#1E293B] bg-[#090D14] p-12 lg:flex lg:flex-col">
+      <div className="relative hidden overflow-hidden border-r border-border bg-sidebar p-12 lg:flex lg:flex-col">
         <div className="pointer-events-none absolute inset-0 dot-grid opacity-40" />
         <div className="pointer-events-none absolute -left-24 bottom-0 size-[480px] rounded-full bg-blue-600/15 blur-[110px]" />
         <Logo className="relative" />
         <div className="relative mt-auto max-w-md">
-          <h2 className="font-heading text-[34px] font-bold leading-tight text-white">
+          <h2 className="font-heading text-[34px] font-bold leading-tight text-foreground">
             {isLogin ? "Welcome back. Your pipeline missed you." : "Launch your first campaign in minutes."}
           </h2>
-          <p className="mt-4 text-slate-400">
+          <p className="mt-4 text-muted-foreground">
             Sequences, sender rotation, open & click tracking and a unified inbox — running on mailboxes you own.
           </p>
           <div className="mt-10 grid grid-cols-3 gap-3">
             {[["340k+", "emails sent"], ["47%", "avg open rate"], ["8.1%", "avg reply rate"]].map(([v, l]) => (
-              <div key={l} className="rounded-xl border border-[#1E293B] bg-panel/80 p-4 backdrop-blur">
-                <p className="font-mono text-xl font-semibold text-white">{v}</p>
-                <p className="mt-1 text-xs text-slate-500">{l}</p>
+              <div key={l} className="rounded-xl border border-border bg-panel/80 p-4 backdrop-blur">
+                <p className="font-mono text-xl font-semibold text-foreground">{v}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{l}</p>
               </div>
             ))}
           </div>
@@ -61,10 +61,10 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       <div className="flex items-center justify-center px-5 py-12">
         <div className="w-full max-w-sm animate-fade-up">
           <div className="lg:hidden"><Logo /></div>
-          <h1 className="mt-8 font-heading text-[28px] font-bold text-white lg:mt-0" data-testid="auth-title">
+          <h1 className="mt-8 font-heading text-[28px] font-bold text-foreground lg:mt-0" data-testid="auth-title">
             {isLogin ? "Log in" : "Create your account"}
           </h1>
-          <p className="mt-1.5 text-sm text-slate-400">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             {isLogin ? "Enter your credentials to access your workspace." : "Free forever on your own infrastructure."}
           </p>
           <form onSubmit={submit} className="mt-8 space-y-4" data-testid="auth-form">
@@ -92,11 +92,11 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
             </Button>
           </form>
           {isLogin && (
-            <button type="button" onClick={fillDemo} className="mt-4 w-full rounded-lg border border-dashed border-[#263247] px-3 py-2.5 text-left text-xs text-slate-400 transition-colors hover:border-cyan-500/40 hover:text-slate-200" data-testid="auth-fill-demo-button">
+            <button type="button" onClick={fillDemo} className="mt-4 w-full rounded-lg border border-dashed border-input px-3 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:border-cyan-500/40 hover:text-foreground/90" data-testid="auth-fill-demo-button">
               <span className="font-semibold text-cyan">Try the demo workspace →</span> demo@outreachforge.io / Demo@1234
             </button>
           )}
-          <p className="mt-6 text-center text-sm text-slate-400">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             {isLogin ? "New to OutreachForge? " : "Already have an account? "}
             <Link to={isLogin ? "/signup" : "/login"} className="font-medium text-cyan hover:underline" data-testid="auth-switch-link">
               {isLogin ? "Create an account" : "Log in"}

@@ -33,19 +33,19 @@ function LiveBar({ campaign }: { campaign: Campaign }) {
   const pct = d?.capacity_used_pct ?? 0;
   const items = [
     { icon: Gauge, label: "Sending capacity", value: d ? `${pct.toFixed(0)}% used` : "—", sub: d ? `${d.sent_today}/${d.daily_capacity} today` : "", tone: pct >= 100 ? "text-amber-300" : "text-emerald-300", id: "capacity" },
-    { icon: Workflow, label: "Active sequences", value: d ? fmt(d.active_sequences) : "—", sub: "leads still in sequence", tone: "text-white", id: "active" },
-    { icon: Send, label: "Emails sent (30m)", value: d ? fmt(d.sent_last_30m) : "—", sub: `gap ${campaign.gap_min_minutes}–${campaign.gap_max_minutes} min per inbox`, tone: "text-white", id: "sent30" },
-    { icon: Timer, label: "Next email in", value: next, sub: nextSub, tone: d?.next_email_at ? "text-cyan" : "text-slate-400", id: "next" },
+    { icon: Workflow, label: "Active sequences", value: d ? fmt(d.active_sequences) : "—", sub: "leads still in sequence", tone: "text-foreground", id: "active" },
+    { icon: Send, label: "Emails sent (30m)", value: d ? fmt(d.sent_last_30m) : "—", sub: `gap ${campaign.gap_min_minutes}–${campaign.gap_max_minutes} min per inbox`, tone: "text-foreground", id: "sent30" },
+    { icon: Timer, label: "Next email in", value: next, sub: nextSub, tone: d?.next_email_at ? "text-cyan" : "text-muted-foreground", id: "next" },
   ];
   return (
-    <div className="mb-6 grid grid-cols-2 divide-[#1E293B] overflow-hidden rounded-xl border border-[#1E293B] bg-panel lg:grid-cols-4 lg:divide-x" data-testid="campaign-live-bar">
+    <div className="mb-6 grid grid-cols-2 divide-border overflow-hidden rounded-xl border border-border bg-panel lg:grid-cols-4 lg:divide-x" data-testid="campaign-live-bar">
       {items.map((it) => (
         <div key={it.id} className="flex items-center gap-3 px-5 py-3.5" data-testid={`live-${it.id}`}>
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#1E293B]"><it.icon className="size-4 text-cyan" /></span>
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary"><it.icon className="size-4 text-cyan" /></span>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-slate-500">{it.label}</p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{it.label}</p>
             <p className={`font-mono text-[15px] font-semibold ${it.tone}`} data-testid={`live-${it.id}-value`}>{it.value}</p>
-            {it.sub && <p className="truncate text-[11px] text-slate-500" data-testid={`live-${it.id}-sub`}>{it.sub}</p>}
+            {it.sub && <p className="truncate text-[11px] text-muted-foreground" data-testid={`live-${it.id}-sub`}>{it.sub}</p>}
           </div>
         </div>
       ))}
@@ -68,20 +68,20 @@ function Overview({ campaign }: { campaign: Campaign }) {
         <StatCard testId="campaign-kpi-bounce-rate" label="Bounce rate" value={pctFmt(t.bounce_rate)} sub={`${t.bounced} bounced · ${t.unsubscribed} unsub`} icon={ShieldAlert} accent="text-red-300" />
       </div>
       <Panel title="Daily activity" action={<SeriesToggles visible={visible} onChange={setVisible} />} testId="campaign-chart-panel">
-        <div className="p-4">{a.data ? <PerformanceChart data={a.data.series} visible={visible} height={260} /> : <div className="h-[260px] animate-pulse rounded-lg bg-[#161F30]" />}</div>
+        <div className="p-4">{a.data ? <PerformanceChart data={a.data.series} visible={visible} height={260} /> : <div className="h-[260px] animate-pulse rounded-lg bg-muted" />}</div>
       </Panel>
       <Panel title="Step performance" testId="campaign-steps-panel">
-        <div className="divide-y divide-[#1E293B]">
+        <div className="divide-y divide-border">
           {(a.data?.steps ?? []).map((s) => (
             <div key={s.step} className="grid grid-cols-2 items-center gap-4 px-5 py-4 md:grid-cols-12" data-testid={`step-stat-${s.step}`}>
               <div className="col-span-2 min-w-0 md:col-span-4">
                 <span className="font-mono text-[11px] uppercase text-cyan">Step {s.step}</span>
-                <p className="truncate text-sm text-slate-200">{s.subject || "Same-thread follow-up"}</p>
+                <p className="truncate text-sm text-foreground/90">{s.subject || "Same-thread follow-up"}</p>
               </div>
               {([["Sent", s.sent, 100, "bg-blue-500"], ["Opened", s.opened, s.sent ? (s.opened / s.sent) * 100 : 0, "bg-sky-400"],
                 ["Clicked", s.clicked, s.sent ? (s.clicked / s.sent) * 100 : 0, "bg-amber-400"], ["Replied", s.replied, s.sent ? (s.replied / s.sent) * 100 : 0, "bg-emerald-400"]] as const).map(([l, v, p, c]) => (
                 <div key={l} className="md:col-span-2">
-                  <div className="mb-1 flex justify-between font-mono text-xs"><span className="text-slate-500">{l}</span><span className="text-slate-200">{v}</span></div>
+                  <div className="mb-1 flex justify-between font-mono text-xs"><span className="text-muted-foreground">{l}</span><span className="text-foreground/90">{v}</span></div>
                   <RateBar value={p} color={c} />
                 </div>
               ))}
@@ -90,16 +90,16 @@ function Overview({ campaign }: { campaign: Campaign }) {
                   {s.variants.map((v) => {
                     const win = s.ab_winner === v.variant;
                     return (
-                      <div key={v.variant} className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${win ? "border-emerald-500/40 bg-emerald-500/[0.06]" : "border-[#1E293B] bg-[#0B0F17]"}`} data-testid={`step-${s.step}-variant-${v.variant}`}>
-                        <span className={`grid size-6 shrink-0 place-items-center rounded font-mono text-xs font-bold ${win ? "bg-emerald-500 text-[#0B0F17]" : "bg-[#1E293B] text-slate-300"}`}>{v.variant.toUpperCase()}</span>
-                        <p className="min-w-0 flex-1 truncate text-xs text-slate-300">{v.subject}</p>
-                        <span className="font-mono text-xs text-slate-400">{v.sent} sent</span>
+                      <div key={v.variant} className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${win ? "border-emerald-500/40 bg-emerald-500/[0.06]" : "border-border bg-background"}`} data-testid={`step-${s.step}-variant-${v.variant}`}>
+                        <span className={`grid size-6 shrink-0 place-items-center rounded font-mono text-xs font-bold ${win ? "bg-emerald-500 text-white" : "bg-secondary text-foreground/75"}`}>{v.variant.toUpperCase()}</span>
+                        <p className="min-w-0 flex-1 truncate text-xs text-foreground/75">{v.subject}</p>
+                        <span className="font-mono text-xs text-muted-foreground">{v.sent} sent</span>
                         <span className="font-mono text-xs text-sky-300">{pctFmt(v.open_rate)} open</span>
                         {win && <span className="text-[10px] font-semibold uppercase text-emerald-300">Winner</span>}
                       </div>
                     );
                   })}
-                  {!s.ab_winner && <p className="text-[11px] text-slate-500 md:col-span-2">A/B test running — a winner is chosen automatically after 20 sends per version.</p>}
+                  {!s.ab_winner && <p className="text-[11px] text-muted-foreground md:col-span-2">A/B test running — a winner is chosen automatically after 20 sends per version.</p>}
                 </div>
               )}
             </div>
@@ -143,16 +143,16 @@ export default function CampaignDetail() {
 
   return (
     <AppShell>
-      <Link to="/campaigns" className="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-400 transition-colors hover:text-white" data-testid="back-to-campaigns-link">
+      <Link to="/campaigns" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground" data-testid="back-to-campaigns-link">
         <ArrowLeft className="size-4" /> Campaigns
       </Link>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between animate-fade-up">
         <div className="min-w-0">
-          <h1 className="truncate font-heading text-2xl font-bold text-white sm:text-[28px]" data-testid="campaign-title">{camp?.name ?? (c.isError ? "Campaign unavailable" : "Loading…")}</h1>
+          <h1 className="truncate font-heading text-2xl font-bold text-foreground sm:text-[28px]" data-testid="campaign-title">{camp?.name ?? (c.isError ? "Campaign unavailable" : "Loading…")}</h1>
           {camp && st && (
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <Pill cls={st.cls} dot={st.dot} testId="campaign-status-badge">{st.label}</Pill>
-              <span className="text-xs text-slate-500">{camp.steps.length} steps · {camp.sender_ids.length} inboxes · {camp.progress.toFixed(0)}% complete</span>
+              <span className="text-xs text-muted-foreground">{camp.steps.length} steps · {camp.sender_ids.length} inboxes · {camp.progress.toFixed(0)}% complete</span>
             </div>
           )}
         </div>
@@ -168,7 +168,7 @@ export default function CampaignDetail() {
               </Button>
             )}
             <Button variant="ghost" size="icon" onClick={() => setConfirmDel(true)} data-testid="campaign-delete-button" aria-label="Delete campaign">
-              <Trash2 className="size-4 text-slate-400" />
+              <Trash2 className="size-4 text-muted-foreground" />
             </Button>
           </div>
         )}
@@ -178,7 +178,7 @@ export default function CampaignDetail() {
         <>
         <LiveBar campaign={camp} />
         <Tabs value={tab} onValueChange={(v) => setParams({ tab: String(v) })}>
-          <TabsList variant="line" className="mb-6 border-b border-[#1E293B] w-full justify-start rounded-none">
+          <TabsList variant="line" className="mb-6 border-b border-border w-full justify-start rounded-none">
             {[["overview", "Overview"], ["leads", `Leads (${camp.stats.leads})`], ["sequence", "Sequence"], ["settings", "Settings"]].map(([k, l]) => (
               <TabsTrigger key={k} value={k} className="flex-none px-4" data-testid={`campaign-tab-${k}`}>{l}</TabsTrigger>
             ))}
