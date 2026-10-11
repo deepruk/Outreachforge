@@ -349,7 +349,9 @@ async def sync_sender(sender: dict) -> int:
         if not lead:
             continue
         body = mailer.strip_quoted(m["body"])
-        if await record_reply(uid, lead, sender["id"], m["subject"] or "(no subject)", body, m["message_id"], m["from_email"], sender["email"]):
+        normalized_subject = " ".join((m.get("subject") or "").strip().split())
+        reply_subject = normalized_subject if normalized_subject.lower().startswith("re:") else f"Re: {normalized_subject or lead.get('last_subject') or 'your message'}"
+        if await record_reply(uid, lead, sender["id"], reply_subject, body, m["message_id"], m["from_email"], sender["email"]):
             count += 1
     await db.senders.update_one({"id": sender["id"]}, {"$set": {"last_uid": max_uid, "last_synced_at": now()}})
     return count
