@@ -1,5 +1,6 @@
 """Blocking SMTP/IMAP helpers — always call through asyncio.to_thread."""
 import email
+import random
 import html
 import imaplib
 import re
@@ -37,6 +38,20 @@ def render_vars(text: str, lead: dict, extra: dict | None = None) -> str:
         return DEFAULTS.get(key, "" if key in values else m.group(0))
 
     return VAR_RE.sub(sub, text)
+
+
+SPIN_RE = re.compile(r"\{([^{}]*\|[^{}]*)\}")
+
+
+def spin(text: str, rnd: "random.Random | None" = None) -> str:
+    """Resolve spintax {Hi|Hey|Hello} (nesting allowed). Run after render_vars so {{var|fallback}} is already gone."""
+    r = rnd or random
+    for _ in range(20):
+        new = SPIN_RE.sub(lambda m: r.choice(m.group(1).split("|")), text)
+        if new == text:
+            break
+        text = new
+    return text
 
 
 def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_clicks: bool) -> str:

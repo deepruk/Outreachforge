@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import NotificationBell from "@/components/NotificationBell";
 
 export function Logo({ className }: { className?: string }) {
   return (
@@ -135,6 +136,7 @@ export default function AppShell({ children, wide }: { children: ReactNode; wide
             <span className="hidden sm:inline" data-testid="engine-status">Sending engine online</span>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            {me.isSuccess && <NotificationBell />}
             <Button size="sm" onClick={() => navigate("/campaigns?new=1")} data-testid="topbar-new-campaign-button">
               <Plus className="size-4" /> New campaign
             </Button>

@@ -113,6 +113,9 @@ class CampaignUpdate(BaseModel):
     track_clicks: Optional[bool] = None
     stop_on_reply: Optional[bool] = None
     include_unsubscribe: Optional[bool] = None
+    send_days: Optional[list[int]] = Field(default=None, max_length=7)
+    timezone: Optional[str] = None
+    use_lead_timezone: Optional[bool] = None
     send_start_hour: Optional[int] = Field(default=None, ge=0, le=23)
     send_end_hour: Optional[int] = Field(default=None, ge=1, le=24)
 
@@ -144,6 +147,9 @@ class CampaignOut(BaseModel):
     stop_on_reply: bool
     include_unsubscribe: bool = True
     custom_fields: list[str] = []
+    send_days: list[int] = [0, 1, 2, 3, 4, 5, 6]
+    timezone: str = "UTC"
+    use_lead_timezone: bool = False
     send_start_hour: int
     send_end_hour: int
     created_at: datetime
@@ -162,6 +168,7 @@ class LeadIn(BaseModel):
     last_name: str = ""
     company: str = ""
     title: str = ""
+    timezone: str = ""
     custom: dict[str, str] = {}
 
 
@@ -182,6 +189,7 @@ class LeadOut(BaseModel):
     last_name: str
     company: str
     title: str
+    timezone: str = ""
     custom: dict[str, str] = {}
     status: LeadStatus
     current_step: int
@@ -293,3 +301,21 @@ class InboxCounts(BaseModel):
 class SyncResult(BaseModel):
     new_replies: int
     errors: list[str]
+
+
+# ---------- notifications ----------
+class Notification(BaseModel):
+    id: str
+    thread_id: str
+    label: ThreadLabel
+    contact_name: str
+    company: str = ""
+    snippet: str
+    campaign_name: str = ""
+    created_at: datetime
+    read: bool
+
+
+class NotificationList(BaseModel):
+    items: list[Notification]
+    unread: int

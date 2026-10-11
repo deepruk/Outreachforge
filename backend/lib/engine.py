@@ -4,6 +4,7 @@ import logging
 import os
 import re
 from datetime import timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from lib import mailer
 from lib.db import db
@@ -11,6 +12,37 @@ from lib.util import new_id, now, start_of_today, warmup_info
 
 log = logging.getLogger("engine")
 OOO_RE = re.compile(r"out of (the )?office|automatic reply|auto(-| )?reply|on vacation|on leave", re.I)
+NOT_RE = re.compile(r"not interested|no thanks|no, thanks|remove me|unsubscribe|stop emailing|take me off|don'?t contact|not a fit|not looking", re.I)
+WRONG_RE = re.compile(r"not the right person|wrong person|no longer (work|with)|reach out to (our|my)", re.I)
+MEETING_RE = re.compile(r"\b(booked|scheduled|calendar invite|send (me |over )?an? invite|see you (on|then)|(monday|tuesday|wednesday|thursday|friday) at \d|works for me|let'?s (meet|talk|chat|connect|do it)|happy to (chat|talk|meet|jump)|book(ed)? a (slot|time|call|meeting))", re.I)
+INTEREST_RE = re.compile(r"\b(interested|sounds (good|great|interesting)|tell me more|send (over )?(more )?(info|details|pricing|case stud)|pricing|how much|curious|open to|keen|let me know more|what does .* look like|demo)\b", re.I)
+HOT_LABELS = {"interested", "meeting_booked"}
+
+
+def classify_reply(subject: str, body: str) -> str | None:
+    """Keyword triage of an inbound reply → thread label (None = leave unlabeled)."""
+    text = f"{subject}\n{body[:1500]}"
+    if OOO_RE.search(text):
+        return "out_of_office"
+    if NOT_RE.search(text):
+        return "not_interested"
+    if WRONG_RE.search(text):
+        return "wrong_person"
+    if MEETING_RE.search(text):
+        return "meeting_booked"
+    if INTEREST_RE.search(text):
+        return "interested"
+    return None
+
+
+async def notify_hot_reply(user_id: str, thread_id: str, label: str, contact_name: str, company: str,
+                           snippet: str, campaign_id: str) -> None:
+    camp = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0, "name": 1}) or {}
+    await db.notifications.insert_one({
+        "id": new_id(), "user_id": user_id, "thread_id": thread_id, "label": label,
+        "contact_name": contact_name, "company": company, "snippet": snippet,
+        "campaign_name": camp.get("name", ""), "created_at": now(), "read": False,
+    })
 BOUNCE_FROM = ("mailer-daemon", "postmaster")
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 AB_MIN_SENDS = int(os.environ.get("AB_MIN_SENDS", "20"))  # per variant before a winner is picked
@@ -73,10 +105,26 @@ async def unsubscribe_message(mid: str) -> bool:
     return True
 
 
+def zone(name: str | None) -> ZoneInfo | None:
+    try:
+        return ZoneInfo(name) if name else None
+    except (ZoneInfoNotFoundError, ValueError):
+        return None
+
+
+def in_send_window(c: dict, lead: dict) -> bool:
+    """Sending calendar: allowed weekday + hour range, in the lead's timezone (if enabled) else the campaign's."""
+    tz = (zone(lead.get("timezone")) if c.get("use_lead_timezone") else None) or zone(c.get("timezone")) or ZoneInfo("UTC")
+    local = now().astimezone(tz)
+    days = c.get("send_days")
+    if days is not None and local.weekday() not in days:
+        return False
+    return c.get("send_start_hour", 0) <= local.hour < c.get("send_end_hour", 24)
+
+
 async def process_campaign(c: dict) -> None:
     n = now()
-    hour = n.hour
-    if not (c.get("send_start_hour", 0) <= hour < c.get("send_end_hour", 24)):
+    if c.get("send_days") == []:
         return
     steps = c.get("steps") or []
     if not steps:
@@ -92,8 +140,13 @@ async def process_campaign(c: dict) -> None:
     leads = await db.leads.find(
         {"campaign_id": c["id"], "status": {"$in": ["pending", "in_progress"]}, "next_send_at": {"$lte": n}},
         {"_id": 0},
-    ).sort("next_send_at", 1).to_list(min(budget, 25))
+    ).sort("next_send_at", 1).to_list(200)
+    sent_now = 0
     for lead in leads:
+        if sent_now >= min(budget, 25):
+            break
+        if not in_send_window(c, lead):
+            continue
         avail = [s for s in senders if capacity.get(s["id"], 0) > 0]
         if not avail:
             break
@@ -119,11 +172,11 @@ async def process_campaign(c: dict) -> None:
         mid = new_id()
         unsub_url = f"{base_url()}/api/u/{mid}"
         raw_subject = step.get("subject_b") if variant == "b" else step.get("subject")
-        subject = mailer.render_vars(raw_subject or "", lead)
+        subject = mailer.spin(mailer.render_vars(raw_subject or "", lead))
         if not subject.strip():
             subject = "Re: " + (first["subject"] if first else "Quick question")
         raw_body = step.get("body") or ""
-        body = mailer.render_vars(raw_body, lead, {"unsubscribe_link": unsub_url})
+        body = mailer.spin(mailer.render_vars(raw_body, lead, {"unsubscribe_link": unsub_url}))
         if c.get("include_unsubscribe", True) and "unsubscribe_link" not in raw_body:
             body += UNSUB_FOOTER.format(url=unsub_url)
         html = mailer.build_html(body, mid, base_url(), c.get("track_opens", True), c.get("track_clicks", True))
@@ -147,6 +200,7 @@ async def process_campaign(c: dict) -> None:
             "open_count": 0, "clicked_at": None, "click_count": 0, "replied_at": None, "bounced": False,
         })
         capacity[sender["id"]] -= 1
+        sent_now += 1
         nxt = idx + 1
         upd: dict = {"current_step": nxt, "last_sent_at": now(), "sender_id": sender["id"]}
         if nxt >= len(steps):
@@ -173,12 +227,13 @@ async def record_reply(user_id: str, lead: dict, sender_id: str, subject: str, b
         return False
     at = now()
     snippet = " ".join(body.split())[:160]
-    label = "out_of_office" if OOO_RE.search(subject + " " + body[:400]) else None
+    label = classify_reply(subject, body)
     thread = await db.threads.find_one({"user_id": user_id, "lead_id": lead["id"]}, {"_id": 0})
     if thread:
         upd = {"snippet": snippet, "last_at": at, "unread": True}
-        if label and thread.get("label") == "none":
+        if label and (thread.get("label") in ("none", "out_of_office") or label in HOT_LABELS):
             upd["label"] = label
+        contact_name = thread["contact_name"]
         await db.threads.update_one({"id": thread["id"]}, {"$set": upd})
         tid = thread["id"]
     else:
@@ -190,10 +245,13 @@ async def record_reply(user_id: str, lead: dict, sender_id: str, subject: str, b
             "company": lead.get("company", ""), "subject": subject, "snippet": snippet, "last_at": at,
             "unread": True, "label": label or "none",
         })
+        contact_name = f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip() or lead["email"]
     await db.thread_messages.insert_one({
         "id": new_id(), "user_id": user_id, "thread_id": tid, "direction": "in", "from_email": from_email,
         "to_email": to_email, "subject": subject, "body": body, "at": at, "message_id": message_id, "kind": "reply",
     })
+    if label in HOT_LABELS:
+        await notify_hot_reply(user_id, tid, label, contact_name, lead.get("company", ""), snippet, lead["campaign_id"])
     camp = await db.campaigns.find_one({"id": lead["campaign_id"]}, {"_id": 0, "stop_on_reply": 1})
     if label != "out_of_office" and (camp or {}).get("stop_on_reply", True):
         await db.leads.update_one({"id": lead["id"]}, {"$set": {"status": "replied", "next_send_at": None}})
@@ -257,7 +315,7 @@ async def run_forever() -> None:
     while True:
         try:
             await send_tick()
-            if i % 4 == 0:
+            if i % 2 == 0:  # IMAP reply sync every ~60s
                 await sync_tick()
         except Exception:  # noqa: BLE001
             log.exception("engine tick failed")

@@ -13,7 +13,7 @@ load_dotenv(ROOT_DIR / '.env')
 
 from lib.db import client, ensure_indexes  # noqa: E402
 from lib.engine import run_forever  # noqa: E402
-from routers import analytics, auth, campaigns, inbox, senders  # noqa: E402
+from routers import analytics, auth, campaigns, inbox, notifications, senders  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ async def root():
     return {"message": "OutreachForge API", "ok": True}
 
 
-for r in (auth.router, senders.router, campaigns.router, inbox.router, analytics.router):
+for r in (auth.router, senders.router, campaigns.router, inbox.router, analytics.router, notifications.router):
     api_router.include_router(r)
 
 app.add_middleware(

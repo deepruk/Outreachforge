@@ -1,6 +1,6 @@
-import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clock, FileUp, Loader2, Plus, Save, Search, Trash2, Upload, UserPlus } from "lucide-react";
+import { CalendarDays, Clock, FileUp, Globe, Loader2, Plus, Save, Search, Shuffle, Trash2, Upload, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 import type { Campaign, Lead, LeadImportResult, LeadIn, Sender, Step } from "@/lib/types";
@@ -49,6 +49,7 @@ const ALIASES: Record<StdKey, string[]> = {
   last_name: ["last_name", "last name", "lastname", "last", "surname"],
   company: ["company", "company name", "company_name", "organization", "organisation", "account"],
   title: ["title", "job title", "job_title", "position", "role"],
+  timezone: ["timezone", "time zone", "time_zone", "tz"],
 };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -82,7 +83,7 @@ function toLeads(text: string): { leads: LeadIn[]; invalid: number; customCols: 
     if (header[idx.first_name] === "name" && first.includes(" ") && !last) [first, last] = [first.split(" ")[0], first.split(" ").slice(1).join(" ")];
     const custom: Record<string, string> = {};
     for (const c of customCols) if ((r[c.i] ?? "").trim()) custom[c.h] = r[c.i].trim();
-    leads.push({ email, first_name: first, last_name: last, company: g("company"), title: g("title"), custom });
+    leads.push({ email, first_name: first, last_name: last, company: g("company"), title: g("title"), timezone: g("timezone"), custom });
   }
   return { leads, invalid, customCols: customCols.map((c) => c.h) };
 }
@@ -95,7 +96,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
   const [preview, setPreview] = useState<{ leads: LeadIn[]; invalid: number; customCols: string[]; file: string } | null>(null);
   const [drag, setDrag] = useState(false);
   const [manual, setManual] = useState(false);
-  const [one, setOne] = useState<LeadIn>({ email: "", first_name: "", last_name: "", company: "", title: "", custom: {} });
+  const [one, setOne] = useState<LeadIn>({ email: "", first_name: "", last_name: "", company: "", title: "", timezone: "", custom: {} });
   const fileRef = useRef<HTMLInputElement>(null);
   const leads = useQuery({
     queryKey: ["leads", campaign.id, q, status],
@@ -112,7 +113,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
       toast.success(`${r.added} leads added${r.skipped ? `, ${r.skipped} duplicates skipped` : ""}`);
       setPreview(null);
       setManual(false);
-      setOne({ email: "", first_name: "", last_name: "", company: "", title: "", custom: {} });
+      setOne({ email: "", first_name: "", last_name: "", company: "", title: "", timezone: "", custom: {} });
       refresh();
     },
     onError: (e) => toast.error(errMsg(e)),
@@ -205,6 +206,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
                   <td className="px-5 py-2.5">
                     <p className="font-medium text-slate-100">{`${l.first_name} ${l.last_name}`.trim() || "—"}</p>
                     <p className="font-mono text-xs text-slate-500">{l.email}</p>
+                    {l.timezone && <p className="font-mono text-[10px] text-slate-600" data-testid={`lead-timezone-${l.id}`}>{l.timezone}</p>}
                   </td>
                   <td className="px-3 py-2.5 text-slate-300">
                     {l.company || "—"}<p className="text-xs text-slate-500">{l.title}</p>
@@ -250,13 +252,13 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
           <div className="max-h-72 overflow-auto rounded-lg border border-[#1E293B] scroll-thin">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-[#161F30] text-left text-slate-400">
-                <tr>{["Email", "First", "Last", "Company", "Title", ...(preview?.customCols ?? [])].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}</tr>
+                <tr>{["Email", "First", "Last", "Company", "Title", "Timezone", ...(preview?.customCols ?? [])].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}</tr>
               </thead>
               <tbody>
                 {preview?.leads.slice(0, 50).map((l, i) => (
                   <tr key={i} className="border-t border-[#1E293B]">
                     <td className="px-3 py-1.5 font-mono">{l.email}</td><td className="px-3 py-1.5">{l.first_name}</td>
-                    <td className="px-3 py-1.5">{l.last_name}</td><td className="px-3 py-1.5">{l.company}</td><td className="px-3 py-1.5">{l.title}</td>
+                    <td className="px-3 py-1.5">{l.last_name}</td><td className="px-3 py-1.5">{l.company}</td><td className="px-3 py-1.5">{l.title}</td><td className="px-3 py-1.5 font-mono">{l.timezone}</td>
                     {preview.customCols.map((c) => <td key={c} className="px-3 py-1.5">{l.custom[c] ?? ""}</td>)}
                   </tr>
                 ))}
@@ -309,6 +311,20 @@ const makeRender = (custom: string[]) => (t: string) =>
     if (custom.includes(key)) return `[${key}]`;
     return fb !== undefined ? fb.trim() : m;
   });
+const SPIN_RE = /\{([^{}]*\|[^{}]*)\}/g;
+function spinText(t: string): string {
+  for (let i = 0; i < 20; i++) {
+    const next = t.replace(SPIN_RE, (_m, g: string) => { const o = g.split("|"); return o[Math.floor(Math.random() * o.length)]; });
+    if (next === t) break;
+    t = next;
+  }
+  return t;
+}
+const countVariants = (t: string) => {
+  let n = 1;
+  for (const m of t.replace(/\{\{[^}]*\}\}/g, "").matchAll(SPIN_RE)) n *= m[1].split("|").length;
+  return n;
+};
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 export function SequenceTab({ campaign }: { campaign: Campaign }) {
@@ -320,7 +336,10 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const lastSel = useRef<number | null>(null);
   const vars = [...BASE_VARS, ...campaign.custom_fields, "unsubscribe_link"];
-  const render = makeRender(campaign.custom_fields);
+  const renderVars = makeRender(campaign.custom_fields);
+  const [shuffle, setShuffle] = useState(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const render = useMemo(() => { const cache = new Map<string, string>(); return (t: string) => { if (!cache.has(t)) cache.set(t, spinText(renderVars(t))); return cache.get(t)!; }; }, [shuffle, campaign.custom_fields]);
   const dirty = JSON.stringify(steps) !== JSON.stringify(campaign.steps);
   const save = useMutation({
     mutationFn: () => apiPut<Campaign>(`/campaigns/${campaign.id}`, { steps }),
@@ -334,9 +353,8 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
   });
   const cur = steps[active];
   const patch = (p: Partial<Step>) => setSteps(steps.map((s, i) => (i === active ? { ...s, ...p } : s)));
-  const insertVar = (v: string) => {
+  const insertVar = (token: string) => {
     const el = bodyRef.current;
-    const token = `{{${v}}}`;
     if (!el || !cur) return;
     const focused = document.activeElement === el || lastSel.current !== null;
     const a = focused ? (lastSel.current ?? el.selectionStart) : cur.body.length;
@@ -442,14 +460,17 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
                   <Label>Body</Label>
                   <div className="flex flex-wrap gap-1">
                     {vars.map((v) => (
-                      <button key={v} type="button" onClick={() => insertVar(v)} className="rounded-md border border-[#263247] bg-[#161F30] px-2 py-0.5 font-mono text-[11px] text-cyan transition-colors hover:border-cyan-500/50" data-testid={`insert-var-${v}`}>
+                      <button key={v} type="button" onClick={() => insertVar(`{{${v}}}`)} className="rounded-md border border-[#263247] bg-[#161F30] px-2 py-0.5 font-mono text-[11px] text-cyan transition-colors hover:border-cyan-500/50" data-testid={`insert-var-${v}`}>
                         {`{{${v}}}`}
                       </button>
                     ))}
+                    <button type="button" onClick={() => insertVar("{Hi|Hey|Hello}")} className="rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-200 transition-colors hover:border-violet-400/60" data-testid="insert-spintax">
+                      {"{Hi|Hey|Hello}"}
+                    </button>
                   </div>
                 </div>
                 <Textarea ref={bodyRef} value={cur.body} onChange={(e) => patch({ body: e.target.value })} onBlur={(e) => { lastSel.current = e.currentTarget.selectionStart; }} rows={11} className="font-mono text-[13px] leading-relaxed" data-testid="step-body-input" />
-                <p className="text-xs text-slate-500">Plain text. Use <span className="font-mono">{"{{field|fallback}}"}</span> for a default when a lead's value is empty. Links are tracked when click tracking is on.</p>
+                <p className="text-xs text-slate-500">Plain text. Use <span className="font-mono">{"{{field|fallback}}"}</span> for a default when a value is empty, and <span className="font-mono text-violet-200">{"{a|b|c}"}</span> spintax so each send picks a random option{countVariants(cur.subject + cur.body) > 1 && <span className="text-violet-200" data-testid="spintax-variant-count"> ({countVariants(cur.subject + cur.subject_b + cur.body).toLocaleString()} combinations)</span>}. Links are tracked when click tracking is on.</p>
               </div>
             </div>
           </Panel>
@@ -457,14 +478,19 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
         {cur && (
           <Panel
             title="Preview"
-            action={cur.subject_b.trim() ? (
+            action={
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" size="xs" onClick={() => setShuffle((x) => x + 1)} data-testid="preview-shuffle-button"><Shuffle className="size-3.5" />Shuffle</Button>
+                {cur.subject_b.trim() && (
               <div className="flex gap-1 rounded-md border border-[#1E293B] p-0.5">
                 {[false, true].map((b) => (
                   <button key={String(b)} type="button" onClick={() => setPreviewB(b)} data-testid={`preview-variant-${b ? "b" : "a"}`}
                     className={cn("rounded px-2 py-0.5 text-xs", previewB === b ? "bg-[#1E293B] text-white" : "text-slate-500")}>{b ? "B" : "A"}</button>
                 ))}
               </div>
-            ) : undefined}
+                )}
+              </div>
+            }
             testId="sequence-preview"
           >
             <div className="p-5 text-sm">
@@ -484,6 +510,13 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
 
 // ---------------- Settings tab ----------------
 const HOURS = Array.from({ length: 25 }, (_, i) => i);
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const TIMEZONES = [
+  "UTC", "America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Toronto", "America/Sao_Paulo",
+  "Europe/London", "Europe/Dublin", "Europe/Paris", "Europe/Berlin", "Europe/Madrid", "Europe/Amsterdam", "Europe/Stockholm",
+  "Africa/Johannesburg", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Hong_Kong", "Asia/Tokyo", "Australia/Sydney", "Pacific/Auckland",
+];
+const tzLabel = (z: string) => (z === "UTC" ? "UTC" : z.split("/").pop()!.replace(/_/g, " ") + ` (${z})`);
 
 export function SettingsTab({ campaign }: { campaign: Campaign }) {
   const qc = useQueryClient();
@@ -492,6 +525,7 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
     name: campaign.name, sender_ids: campaign.sender_ids, daily_limit: campaign.daily_limit,
     track_opens: campaign.track_opens, track_clicks: campaign.track_clicks, stop_on_reply: campaign.stop_on_reply,
     include_unsubscribe: campaign.include_unsubscribe,
+    send_days: campaign.send_days, timezone: campaign.timezone, use_lead_timezone: campaign.use_lead_timezone,
     send_start_hour: campaign.send_start_hour, send_end_hour: campaign.send_end_hour,
   });
   const save = useMutation({
@@ -508,7 +542,8 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-12">
-      <Panel className="lg:col-span-7" title="Sender rotation" testId="settings-senders-panel">
+      <div className="space-y-6 lg:col-span-7">
+      <Panel title="Sender rotation" testId="settings-senders-panel">
         <div className="p-5">
           <p className="mb-4 text-sm text-slate-400">Emails rotate across selected inboxes. Each lead keeps the same inbox for every follow-up.</p>
           <ul className="space-y-2">
@@ -528,27 +563,69 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
           </ul>
         </div>
       </Panel>
-      <div className="space-y-6 lg:col-span-5">
-        <Panel title="Campaign" testId="settings-general-panel">
-          <div className="space-y-4 p-5">
-            <div className="space-y-1.5"><Label>Name</Label><Input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} data-testid="settings-name-input" /></div>
-            <div className="space-y-1.5"><Label>Max emails per day (campaign)</Label><Input type="number" min={1} value={s.daily_limit} onChange={(e) => setS({ ...s, daily_limit: Math.max(1, Number(e.target.value) || 1) })} data-testid="settings-daily-limit-input" /></div>
+      <Panel title={<span className="flex items-center gap-2"><CalendarDays className="size-4 text-cyan" />Sending calendar</span>} testId="settings-calendar-panel">
+          <div className="space-y-5 p-5">
+            <div className="space-y-2">
+              <Label>Send on</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {DAYS.map((d, i) => {
+                  const on = s.send_days.includes(i);
+                  return (
+                    <button key={d} type="button" onClick={() => setS({ ...s, send_days: on ? s.send_days.filter((x) => x !== i) : [...s.send_days, i].sort() })}
+                      className={cn("h-9 w-12 rounded-lg border text-xs font-semibold transition-colors duration-150", on ? "border-blue-500/60 bg-blue-600/15 text-white" : "border-[#1E293B] text-slate-500 hover:border-slate-700")}
+                      data-testid={`settings-day-${i}`} aria-pressed={on}>
+                      {d}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex gap-3 text-xs">
+                <button type="button" className="text-cyan hover:underline" onClick={() => setS({ ...s, send_days: [0, 1, 2, 3, 4] })} data-testid="settings-days-weekdays">Weekdays only</button>
+                <button type="button" className="text-slate-400 hover:underline" onClick={() => setS({ ...s, send_days: [0, 1, 2, 3, 4, 5, 6] })} data-testid="settings-days-all">Every day</button>
+              </div>
+              {s.send_days.length === 0 && <p className="text-xs text-red-300">Pick at least one day — nothing will send otherwise.</p>}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Send from (UTC)</Label>
+                <Label>Send from</Label>
                 <Select value={String(s.send_start_hour)} onValueChange={(v: string) => setS({ ...s, send_start_hour: Number(v) })}>
                   <SelectTrigger className="w-full" data-testid="settings-start-hour"><SelectValue>{(v) => hourLabel(Number(v))}</SelectValue></SelectTrigger>
                   <SelectContent>{HOURS.slice(0, 24).map((h) => <SelectItem key={h} value={String(h)}>{hourLabel(h)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Until (UTC)</Label>
+                <Label>Until</Label>
                 <Select value={String(s.send_end_hour)} onValueChange={(v: string) => setS({ ...s, send_end_hour: Number(v) })}>
                   <SelectTrigger className="w-full" data-testid="settings-end-hour"><SelectValue>{(v) => hourLabel(Number(v))}</SelectValue></SelectTrigger>
                   <SelectContent>{HOURS.slice(1).map((h) => <SelectItem key={h} value={String(h)}>{hourLabel(h)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label>Campaign timezone</Label>
+              <Select value={s.timezone} onValueChange={(v: string) => setS({ ...s, timezone: v })}>
+                <SelectTrigger className="w-full" data-testid="settings-timezone-select"><SelectValue>{(v) => tzLabel(v as string)}</SelectValue></SelectTrigger>
+                <SelectContent className="max-h-72">{TIMEZONES.map((z) => <SelectItem key={z} value={z}>{tzLabel(z)}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-[#1E293B] bg-[#0B0F17] p-4">
+              <div>
+                <p className="flex items-center gap-1.5 text-sm font-medium text-slate-100"><Globe className="size-4 text-cyan" />Send in each lead's timezone</p>
+                <p className="mt-0.5 text-xs text-slate-500">Uses the <span className="font-mono">timezone</span> CSV column (e.g. America/New_York). Leads without one fall back to the campaign timezone.</p>
+              </div>
+              <Switch checked={s.use_lead_timezone} onCheckedChange={(v) => setS({ ...s, use_lead_timezone: v })} data-testid="settings-use_lead_timezone-switch" />
+            </label>
+            <p className="rounded-lg bg-[#161F30] px-3 py-2 text-xs text-slate-400" data-testid="settings-calendar-summary">
+              Sends {s.send_days.length === 7 ? "every day" : s.send_days.length === 0 ? "never" : DAYS.filter((_, i) => s.send_days.includes(i)).join(", ")} between {hourLabel(s.send_start_hour)} and {hourLabel(s.send_end_hour)} {s.use_lead_timezone ? "in each lead's local time" : tzLabel(s.timezone)}.
+            </p>
+          </div>
+        </Panel>
+      </div>
+      <div className="space-y-6 lg:col-span-5">
+        <Panel title="Campaign" testId="settings-general-panel">
+          <div className="space-y-4 p-5">
+            <div className="space-y-1.5"><Label>Name</Label><Input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} data-testid="settings-name-input" /></div>
+            <div className="space-y-1.5"><Label>Max emails per day (campaign)</Label><Input type="number" min={1} value={s.daily_limit} onChange={(e) => setS({ ...s, daily_limit: Math.max(1, Number(e.target.value) || 1) })} data-testid="settings-daily-limit-input" /></div>
           </div>
         </Panel>
         <Panel title="Tracking & behaviour" testId="settings-tracking-panel">

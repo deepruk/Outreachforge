@@ -16,6 +16,8 @@ LAST = ["Carter", "Nguyen", "Patel", "Brooks", "Kim", "Silva", "Hughes", "Reyes"
 COMPANIES = ["Northwind", "Brightlane", "Quantive", "Lumen Labs", "Stackwise", "Peakflow", "Orbitly", "Fernhill",
              "Cobalt AI", "Helix Commerce", "Vantage HQ", "Tidal Systems", "Pinecrest", "Arcadia Health", "Nimbus Pay"]
 CITIES = ["Austin", "London", "Berlin", "Toronto", "Bangalore", "Sydney", "New York", "Dubai"]
+CITY_TZ = {"Austin": "America/Chicago", "London": "Europe/London", "Berlin": "Europe/Berlin", "Toronto": "America/Toronto",
+           "Bangalore": "Asia/Kolkata", "Sydney": "Australia/Sydney", "New York": "America/New_York", "Dubai": "Asia/Dubai"}
 TITLES = ["CEO", "Founder", "VP Sales", "Head of Growth", "CTO", "Marketing Director", "COO"]
 
 REPLIES = [
@@ -39,7 +41,7 @@ CAMPAIGNS = [
 
 STEPS = [
     {"subject": "{{first_name}}, quick idea for {{company}}", "subject_b": "More meetings for {{company}}?", "delay_days": 0,
-     "body": "Hi {{first_name}},\n\nI was looking at {{company}} and noticed you're scaling the team. We help companies like yours book 20+ qualified meetings a month without hiring more SDRs.\n\nHere's a 2-minute breakdown: https://outreachforge.io/case-study\n\nWorth a quick chat next week?\n\nBest,\nAlex"},
+     "body": "{Hi|Hey|Hello} {{first_name}},\n\nI was looking at {{company}} and noticed you're scaling the team. We help companies like yours book 20+ qualified meetings a month without hiring more SDRs.\n\nHere's a 2-minute breakdown: https://outreachforge.io/case-study\n\nWorth a quick chat next week?\n\nBest,\nAlex"},
     {"subject": "", "delay_days": 3,
      "body": "Hi {{first_name}}, just floating this back to the top of your inbox. Would a 15-minute call make sense?\n\nAlex"},
     {"subject": "", "delay_days": 4,
@@ -52,7 +54,7 @@ async def main() -> None:
     user = await db.users.find_one({"email": DEMO_EMAIL})
     if user:
         uid = user["id"]
-        for coll in ("senders", "campaigns", "leads", "messages", "threads", "thread_messages", "unsubscribes"):
+        for coll in ("senders", "campaigns", "leads", "messages", "threads", "thread_messages", "unsubscribes", "notifications"):
             await db[coll].delete_many({"user_id": uid})
         await db.users.update_one({"id": uid}, {"$set": {"password_hash": hash_password(DEMO_PASSWORD)}})
     else:
@@ -79,6 +81,8 @@ async def main() -> None:
             "id": cid, "user_id": uid, "name": name, "status": status,
             "steps": [{"subject_b": "", "ab_winner": "a" if status == "completed" else None, **s, "id": new_id()} for s in STEPS],
             "sender_ids": [s["id"] for s in senders], "include_unsubscribe": True, "custom_fields": ["city"],
+            "send_days": [0, 1, 2, 3, 4],
+            "timezone": "America/New_York", "use_lead_timezone": status == "active",
             "daily_limit": 120, "track_opens": True, "track_clicks": True, "stop_on_reply": True,
             "send_start_hour": 0, "send_end_hour": 24, "created_at": n - timedelta(days=spread + 2),
             "launched_at": (n - timedelta(days=spread)) if status != "draft" else None,
@@ -88,7 +92,7 @@ async def main() -> None:
             fn, ln, co = rnd.choice(FIRST), rnd.choice(LAST), rnd.choice(COMPANIES)
             email = f"{fn.lower()}.{ln.lower()}{i}@{co.lower().replace(' ', '')}.com"
             lead = {"id": new_id(), "user_id": uid, "campaign_id": cid, "email": email, "first_name": fn,
-                    "last_name": ln, "company": co, "title": rnd.choice(TITLES), "custom": {"city": rnd.choice(CITIES)}, "status": "pending",
+                    "last_name": ln, "company": co, "title": rnd.choice(TITLES), "custom": {"city": (city := rnd.choice(CITIES))}, "timezone": CITY_TZ[city], "status": "pending",
                     "current_step": 0, "sender_id": None, "next_send_at": None, "last_sent_at": None,
                     "created_at": n - timedelta(days=spread + 1)}
             leads.append(lead)
@@ -110,7 +114,7 @@ async def main() -> None:
                 variant = ("a" if i % 2 == 0 else "b") if si == 0 else "a"
                 subject = (STEPS[si]["subject_b" if variant == "b" else "subject"] or "").replace("{{first_name}}", fn).replace("{{company}}", co) or f"Re: {first_subject}"
                 first_subject = first_subject or subject
-                body = STEPS[si]["body"].replace("{{first_name}}", fn).replace("{{company}}", co)
+                body = STEPS[si]["body"].replace("{{first_name}}", fn).replace("{{company}}", co).replace("{Hi|Hey|Hello}", rnd.choice(["Hi", "Hey", "Hello"]))
                 opened = rnd.random() < (0.42 if variant == "b" else 0.3)
                 clicked = opened and rnd.random() < 0.2
                 bounce = si == 0 and rnd.random() < 0.025
@@ -166,6 +170,12 @@ async def main() -> None:
         if messages:
             await db.messages.insert_many(messages)
         if threads:
+            hot = sorted([t for t in threads if t["label"] in ("interested", "meeting_booked")], key=lambda t: t["last_at"], reverse=True)[:3]
+            if hot:
+                await db.notifications.insert_many([{
+                    "id": new_id(), "user_id": uid, "thread_id": t["id"], "label": t["label"], "contact_name": t["contact_name"],
+                    "company": t["company"], "snippet": t["snippet"], "campaign_name": name, "created_at": t["last_at"], "read": False,
+                } for t in hot])
             await db.threads.insert_many(threads)
             await db.thread_messages.insert_many(tmsgs)
     print(f"Seeded demo workspace for {DEMO_EMAIL} / {DEMO_PASSWORD}")

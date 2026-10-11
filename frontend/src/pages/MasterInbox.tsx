@@ -189,7 +189,7 @@ export default function MasterInbox() {
                     {d.thread.company && <span className="flex items-center gap-1"><Building2 className="size-3" />{d.thread.company}</span>}
                   </p>
                 </div>
-                <Select value={d.thread.label} onValueChange={(v: string) => label.mutate(v as ThreadLabel)}>
+                <Select value={d.thread.label} onValueChange={(v: string) => { if (v && v !== d.thread.label) label.mutate(v as ThreadLabel); }}>
                   <SelectTrigger size="sm" className="w-44" data-testid="thread-label-select"><SelectValue>{(v) => THREAD_LABEL[v as ThreadLabel]?.label}</SelectValue></SelectTrigger>
                   <SelectContent>{Object.entries(THREAD_LABEL).map(([k, v]) => <SelectItem key={k} value={k} data-testid={`thread-label-option-${k}`}>{v.label}</SelectItem>)}</SelectContent>
                 </Select>

@@ -104,6 +104,9 @@ export interface Campaign {
   stop_on_reply: boolean;
   include_unsubscribe: boolean;
   custom_fields: string[];
+  send_days: number[];
+  timezone: string;
+  use_lead_timezone: boolean;
   send_start_hour: number;
   send_end_hour: number;
   created_at: string;
@@ -113,7 +116,7 @@ export interface Campaign {
 }
 
 export type CampaignUpdate = Partial<
-  Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "include_unsubscribe" | "send_start_hour" | "send_end_hour">
+  Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "include_unsubscribe" | "send_days" | "timezone" | "use_lead_timezone" | "send_start_hour" | "send_end_hour">
 >;
 
 export type LeadStatus = "pending" | "in_progress" | "completed" | "replied" | "bounced" | "unsubscribed";
@@ -124,6 +127,7 @@ export interface LeadIn {
   last_name: string;
   company: string;
   title: string;
+  timezone: string;
   custom: Record<string, string>;
 }
 
@@ -233,4 +237,21 @@ export interface InboxCounts {
 export interface SyncResult {
   new_replies: number;
   errors: string[];
+}
+
+export interface Notification {
+  id: string;
+  thread_id: string;
+  label: ThreadLabel;
+  contact_name: string;
+  company: string;
+  snippet: string;
+  campaign_name: string;
+  created_at: string;
+  read: boolean;
+}
+
+export interface NotificationList {
+  items: Notification[];
+  unread: number;
 }

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from lib.auth import current_user
 from lib.db import db
-from lib.engine import decide_winner
+from lib.engine import decide_winner, zone
 from lib.stats import PROJ, build_series, build_steps, campaign_totals, totals_from
 from lib.util import new_id, now
 from models.schemas import (
@@ -14,7 +14,7 @@ from models.schemas import (
 )
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
-RESERVED = {"email", "first_name", "last_name", "company", "title", "unsubscribe_link"}
+RESERVED = {"email", "first_name", "last_name", "company", "title", "timezone", "unsubscribe_link"}
 
 DEFAULT_STEPS = [
     {"id": "", "subject": "Quick question, {{first_name}}", "delay_days": 0,
@@ -52,7 +52,8 @@ async def create_campaign(body: CampaignCreate, user: dict = Depends(current_use
         "id": new_id(), "user_id": user["id"], "name": body.name.strip(), "status": "draft",
         "steps": [{**s, "id": new_id()} for s in DEFAULT_STEPS],
         "sender_ids": [s["id"] for s in senders], "daily_limit": 100, "track_opens": True,
-        "track_clicks": True, "stop_on_reply": True, "include_unsubscribe": True, "custom_fields": [], "send_start_hour": 0, "send_end_hour": 24,
+        "track_clicks": True, "stop_on_reply": True, "include_unsubscribe": True, "custom_fields": [],
+        "send_days": [0, 1, 2, 3, 4], "timezone": "UTC", "use_lead_timezone": False, "send_start_hour": 0, "send_end_hour": 24,
         "created_at": now(), "launched_at": None,
     }
     await db.campaigns.insert_one(c)
@@ -79,6 +80,10 @@ async def update_campaign(cid: str, body: CampaignUpdate, user: dict = Depends(c
                 s["ab_winner"] = None
             steps.append({**s, "id": s["id"] if prev else new_id()})
         upd["steps"] = steps
+    if "send_days" in upd:
+        upd["send_days"] = sorted({d for d in upd["send_days"] if 0 <= d <= 6})
+    if "timezone" in upd and not zone(upd["timezone"]):
+        raise HTTPException(status_code=422, detail=f"Unknown timezone: {upd['timezone']}")
     if "sender_ids" in upd:
         owned = await db.senders.find({"user_id": user["id"], "id": {"$in": upd["sender_ids"]}}, {"_id": 0, "id": 1}).to_list(500)
         upd["sender_ids"] = [s["id"] for s in owned]
@@ -167,6 +172,7 @@ async def import_leads(cid: str, body: LeadImport, user: dict = Depends(current_
             "id": new_id(), "user_id": user["id"], "campaign_id": cid, "email": email,
             "first_name": l.first_name.strip(), "last_name": l.last_name.strip(),
             "company": l.company.strip(), "title": l.title.strip(), "custom": custom,
+            "timezone": l.timezone.strip() if zone(l.timezone.strip()) else "",
             "status": "unsubscribed" if email in blocked else "pending",
             "current_step": 0, "sender_id": None,
             "next_send_at": now() if c["status"] == "active" else None,
