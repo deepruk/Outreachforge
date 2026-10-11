@@ -87,7 +87,8 @@ async def google_oauth_callback(request: Request):
 
     try:
         client_id, client_secret, redirect_uri = _google_config()
-        token_response = requests.post(
+        token_response = await asyncio.to_thread(
+            requests.post,
             "https://oauth2.googleapis.com/token",
             data={
                 "code": code,
@@ -102,7 +103,8 @@ async def google_oauth_callback(request: Request):
         if token_response.status_code != 200 or not token_data.get("access_token"):
             raise RuntimeError("Google token exchange failed")
         refresh_token = token_data.get("refresh_token")
-        profile_response = requests.get(
+        profile_response = await asyncio.to_thread(
+            requests.get,
             "https://openidconnect.googleapis.com/v1/userinfo",
             headers={"Authorization": f"Bearer {token_data['access_token']}"},
             timeout=20,
