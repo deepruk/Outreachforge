@@ -307,12 +307,21 @@ async def sync_sender(sender: dict) -> int:
     for m in msgs:
         if m["from_email"] == sender["email"].lower():
             continue
-        if any(b in m["from_email"] for b in BOUNCE_FROM):
-            for addr in set(EMAIL_RE.findall(m["body"])):
-                lead = await db.leads.find_one({"user_id": uid, "email": addr.lower(), "status": {"$in": ["in_progress", "completed"]}}, {"_id": 0})
+        if any(b in m["from_email"] for b in BOUNCE_FROM) or any(
+            marker in (m.get("subject") or "").lower()
+            for marker in ("undeliverable", "delivery status notification", "delivery failure")
+        ):
+            for addr in set(EMAIL_RE.findall(m.get("body", ""))):
+                lead = await db.leads.find_one(
+                    {"user_id": uid, "email": addr.lower(), "status": {"$in": ["in_progress", "completed"]}},
+                    {"_id": 0},
+                )
                 if lead:
-                    await db.leads.update_one({"id": lead["id"]}, {"$set": {"status": "bounced", "next_send_at": None}})
+                    await db.leads.update_one(
+                        {"id": lead["id"]}, {"$set": {"status": "bounced", "next_send_at": None}}
+                    )
                     await db.messages.update_many({"lead_id": lead["id"]}, {"$set": {"bounced": True}})
+                    await db.campaigns.update_one({"id": lead["campaign_id"]}, {"$inc": {"bounces": 1}})
             continue
         lead = None
         refs = [r for r in (m["in_reply_to"] + " " + m["references"]).split() if r]
