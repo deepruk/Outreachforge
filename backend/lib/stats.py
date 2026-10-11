@@ -11,8 +11,8 @@ PROJ = {"_id": 0, "campaign_id": 1, "step_index": 1, "sent_at": 1, "opened_at": 
 def totals_from(msgs: list[dict], leads: int) -> dict:
     sent = len(msgs)
     lead_ids = {m["lead_id"] for m in msgs}
-    opened = len({m["lead_id"] for m in msgs if m.get("opened_at")})
-    clicked = len({m["lead_id"] for m in msgs if m.get("clicked_at")})
+    opened = len({m["lead_id"] for m in msgs if m.get("opened_at") or (m.get("open_count") or 0) > 0})
+    clicked = len({m["lead_id"] for m in msgs if m.get("clicked_at") or (m.get("click_count") or 0) > 0})
     replied = len({m["lead_id"] for m in msgs if m.get("replied_at")})
     bounced = len({m["lead_id"] for m in msgs if m.get("bounced")})
     unsubscribed = len({m["lead_id"] for m in msgs if m.get("unsubscribed")})
