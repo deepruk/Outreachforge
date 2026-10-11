@@ -1,8 +1,6 @@
-// Typed fetch layer for the FastAPI backend.
-// In production, VITE_API_URL points to the separate backend service.
-// In development, leave it unset so Vite can proxy relative /api requests.
-export const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
-const BASE = `${API_BASE}/api`;
+// Typed fetch layer over the FastAPI backend. Base is the relative "/api" prefix so the
+// same code works in dev (Vite proxies /api → :8001) and behind a single origin in prod.
+const BASE = "/api";
 
 // Fields are declared, not constructor parameter properties: tsconfig sets
 // erasableSyntaxOnly, which rejects `constructor(readonly status: number)`.
@@ -21,10 +19,9 @@ export class ApiError extends Error {
 type JsonBody = unknown;
 
 async function request<T>(method: string, path: string, body?: JsonBody): Promise<T> {
-  // Auth uses the httpOnly session cookie, including for cross-origin production API requests.
+  // Auth rides the httpOnly session cookie automatically — never add auth headers here.
   const res = await fetch(`${BASE}${path}`, {
     method,
-    credentials: "include",
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -39,7 +36,8 @@ async function request<T>(method: string, path: string, body?: JsonBody): Promis
   return (await res.json()) as T;
 }
 
-// The response type mirrors the endpoint's Pydantic model by hand — keep the two in sync.
+// The response type is yours to declare: nothing infers across the Python boundary, so a
+// TS interface here mirrors the endpoint's Pydantic model by hand — keep the two in sync.
 export const apiGet = <T>(path: string) => request<T>("GET", path);
 export const apiPost = <T>(path: string, body?: JsonBody) => request<T>("POST", path, body ?? null);
 export const apiPut = <T>(path: string, body?: JsonBody) => request<T>("PUT", path, body ?? null);
