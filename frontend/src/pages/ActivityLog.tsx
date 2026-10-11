@@ -88,7 +88,7 @@ export default function ActivityLog() {
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       <Link to={`/campaigns/${it.campaign_id}`} className="text-[11px] text-muted-foreground hover:text-cyan">{it.campaign_name}</Link>
                       <Pill cls="border-border bg-secondary text-muted-foreground">Step {it.step}{it.variant === "b" ? " · B" : ""}</Pill>
-                      {it.opened && <Pill cls="border-sky-500/30 bg-sky-500/10 text-sky-300">Opened</Pill>}
+                      {it.opened && <Pill cls="border-sky-500/30 bg-sky-500/10 text-sky-300">{it.open_count > 0 ? `Opened ${it.open_count}×` : "Opened"}</Pill>}
                       {it.clicked && <Pill cls="border-amber-500/30 bg-amber-500/10 text-amber-300">Clicked</Pill>}
                       {it.replied && <Pill cls="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">Replied</Pill>}
                       {it.bounced && <Pill cls="border-red-500/30 bg-red-500/10 text-red-300">Bounced</Pill>}
