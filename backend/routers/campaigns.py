@@ -192,8 +192,8 @@ async def list_leads(cid: str, q: str = "", status: Optional[str] = None, user: 
         flt["$or"] = [{f: {"$regex": q, "$options": "i"}} for f in ("email", "first_name", "last_name", "company")]
     docs = await db.leads.find(flt, {"_id": 0}).sort("created_at", -1).to_list(5000)
     ids = [d["id"] for d in docs]
-    opened = set(await db.messages.distinct("lead_id", {"lead_id": {"$in": ids}, "opened_at": {"$ne": None}}))
-    clicked = set(await db.messages.distinct("lead_id", {"lead_id": {"$in": ids}, "clicked_at": {"$ne": None}}))
+    opened = set(await db.messages.distinct("lead_id", {"lead_id": {"$in": ids}, "$or": [{"opened_at": {"$ne": None}}, {"open_count": {"$gt": 0}}]}))
+    clicked = set(await db.messages.distinct("lead_id", {"lead_id": {"$in": ids}, "$or": [{"clicked_at": {"$ne": None}}, {"click_count": {"$gt": 0}}]}))
     return [LeadOut(**{k: v for k, v in d.items() if k in LeadOut.model_fields},
                     opened=d["id"] in opened, clicked=d["id"] in clicked) for d in docs]
 
