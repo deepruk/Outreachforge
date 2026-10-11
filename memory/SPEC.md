@@ -35,3 +35,7 @@ Demo user demo@outreachforge.io / Demo@1234; 3 demo senders; 4 campaigns: "Q3 Sa
 ## Iteration 4
 - **Gap between emails**: campaign `gap_min_minutes`/`gap_max_minutes` (0–240, default 10–15; swapped if min>max). After each send the inbox gets `senders.next_available_at = now + random(min,max)`; engine only uses inboxes past that time (gap is per inbox, across campaigns). Settings → Sending calendar → "Gap between emails" with presets.
 - **Live bar** (campaign detail, above tabs): GET /api/campaigns/{id}/live → capacity_used_pct, sent_today, daily_capacity (min(campaign limit, sum of inbox warm-up limits)), active_sequences, sent_last_30m, next_email_at, next_note. Refetch 10s; countdown ticks every second.
+
+## Iteration 5
+- **Random daily start**: campaign `random_start_minutes` (0–180; new campaigns 30, seed 30). Per inbox per local day a stable offset = sha256(sender_id:date) % (N+1) minutes is added to send_start_hour; engine.sender_started() gates inbox use per lead (in lead/campaign tz).
+- **Activity Log** page `/activity` (nav "Activity Log"): GET /api/activity?campaign_id=&limit= → items (latest sent emails: time, sender inbox → lead, subject, step/variant, opened/clicked/replied/bounced), inboxes (sent_today/effective_limit, last_sent_at, next_available_at from gap), upcoming (next 10 due leads in active campaigns), sent_last_hour. Auto-refresh 10s, live countdowns.

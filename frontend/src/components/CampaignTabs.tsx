@@ -527,6 +527,7 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
     include_unsubscribe: campaign.include_unsubscribe,
     send_days: campaign.send_days, timezone: campaign.timezone, use_lead_timezone: campaign.use_lead_timezone,
     gap_min_minutes: campaign.gap_min_minutes, gap_max_minutes: campaign.gap_max_minutes,
+    random_start_minutes: campaign.random_start_minutes,
     send_start_hour: campaign.send_start_hour, send_end_hour: campaign.send_end_hour,
   });
   const save = useMutation({
@@ -601,6 +602,23 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
                   <SelectContent>{HOURS.slice(1).map((h) => <SelectItem key={h} value={String(h)}>{hourLabel(h)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2 rounded-lg border border-[#1E293B] bg-[#0B0F17] p-4" data-testid="settings-random-start-section">
+              <p className="flex items-center gap-1.5 text-sm font-medium text-slate-100"><Shuffle className="size-4 text-cyan" />Random daily start</p>
+              <p className="text-xs text-slate-500">Each inbox starts its sending day up to this many minutes after "Send from" — a different random time every day.</p>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-sm text-slate-400">Up to</span>
+                <Input type="number" min={0} max={180} value={s.random_start_minutes} onChange={(e) => setS({ ...s, random_start_minutes: Math.min(180, Math.max(0, Number(e.target.value) || 0)) })} className="w-20" data-testid="settings-random-start-input" />
+                <span className="text-sm text-slate-400">minutes late</span>
+                {[0, 15, 30, 60].map((m) => (
+                  <button key={m} type="button" onClick={() => setS({ ...s, random_start_minutes: m })}
+                    className={cn("rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors", s.random_start_minutes === m ? "border-cyan-500/50 bg-cyan-500/10 text-cyan" : "border-[#263247] text-slate-400 hover:text-slate-200")}
+                    data-testid={`settings-random-start-preset-${m}`}>{m === 0 ? "Off" : `${m}m`}</button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-400" data-testid="settings-random-start-summary">
+                {s.random_start_minutes ? `Inboxes start between ${hourLabel(s.send_start_hour)} and ${String(s.send_start_hour + Math.floor(s.random_start_minutes / 60)).padStart(2, "0")}:${String(s.random_start_minutes % 60).padStart(2, "0")}.` : `All inboxes start exactly at ${hourLabel(s.send_start_hour)}.`}
+              </p>
             </div>
             <div className="space-y-2 rounded-lg border border-[#1E293B] bg-[#0B0F17] p-4" data-testid="settings-gap-section">
               <p className="flex items-center gap-1.5 text-sm font-medium text-slate-100"><Timer className="size-4 text-cyan" />Gap between emails</p>

@@ -1,5 +1,6 @@
 """Background workers: campaign sender + IMAP reply sync."""
 import asyncio
+import hashlib
 import logging
 import random
 import os
@@ -113,10 +114,26 @@ def zone(name: str | None) -> ZoneInfo | None:
         return None
 
 
+def lead_tz(c: dict, lead: dict) -> ZoneInfo:
+    return (zone(lead.get("timezone")) if c.get("use_lead_timezone") else None) or zone(c.get("timezone")) or ZoneInfo("UTC")
+
+
+def start_offset(sender_id: str, day: str, max_minutes: int) -> int:
+    """Stable per-inbox, per-day random delay (minutes) added to the window start."""
+    if max_minutes <= 0:
+        return 0
+    return int(hashlib.sha256(f"{sender_id}:{day}".encode()).hexdigest(), 16) % (max_minutes + 1)
+
+
+def sender_started(c: dict, sender: dict, lead: dict) -> bool:
+    local = now().astimezone(lead_tz(c, lead))
+    off = start_offset(sender["id"], local.date().isoformat(), int(c.get("random_start_minutes", 0)))
+    return local.hour * 60 + local.minute >= c.get("send_start_hour", 0) * 60 + off
+
+
 def in_send_window(c: dict, lead: dict) -> bool:
     """Sending calendar: allowed weekday + hour range, in the lead's timezone (if enabled) else the campaign's."""
-    tz = (zone(lead.get("timezone")) if c.get("use_lead_timezone") else None) or zone(c.get("timezone")) or ZoneInfo("UTC")
-    local = now().astimezone(tz)
+    local = now().astimezone(lead_tz(c, lead))
     days = c.get("send_days")
     if days is not None and local.weekday() not in days:
         return False
@@ -158,7 +175,7 @@ async def process_campaign(c: dict) -> None:
             break
         if not in_send_window(c, lead):
             continue
-        avail = [s for s in senders if capacity.get(s["id"], 0) > 0 and sender_ready(s)]
+        avail = [s for s in senders if capacity.get(s["id"], 0) > 0 and sender_ready(s) and sender_started(c, s, lead)]
         if not avail:
             break
         idx = lead.get("current_step", 0)

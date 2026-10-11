@@ -83,6 +83,7 @@ async def main() -> None:
             "sender_ids": [s["id"] for s in senders], "include_unsubscribe": True, "custom_fields": ["city"],
             "send_days": [0, 1, 2, 3, 4],
             "timezone": "America/New_York", "use_lead_timezone": status == "active",
+            "random_start_minutes": 30, "gap_min_minutes": 10, "gap_max_minutes": 15,
             "daily_limit": 120, "track_opens": True, "track_clicks": True, "stop_on_reply": True,
             "send_start_hour": 0, "send_end_hour": 24, "created_at": n - timedelta(days=spread + 2),
             "launched_at": (n - timedelta(days=spread)) if status != "draft" else None,

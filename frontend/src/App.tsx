@@ -7,6 +7,7 @@ import CampaignDetail from "@/pages/CampaignDetail";
 import MasterInbox from "@/pages/MasterInbox";
 import SenderAccounts from "@/pages/SenderAccounts";
 import Analytics from "@/pages/Analytics";
+import ActivityLog from "@/pages/ActivityLog";
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
       <Route path="/inbox" element={<MasterInbox />} />
       <Route path="/senders" element={<SenderAccounts />} />
       <Route path="/analytics" element={<Analytics />} />
+      <Route path="/activity" element={<ActivityLog />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

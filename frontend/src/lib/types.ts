@@ -107,6 +107,7 @@ export interface Campaign {
   send_days: number[];
   timezone: string;
   use_lead_timezone: boolean;
+  random_start_minutes: number;
   gap_min_minutes: number;
   gap_max_minutes: number;
   send_start_hour: number;
@@ -118,7 +119,7 @@ export interface Campaign {
 }
 
 export type CampaignUpdate = Partial<
-  Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "include_unsubscribe" | "send_days" | "timezone" | "use_lead_timezone" | "gap_min_minutes" | "gap_max_minutes" | "send_start_hour" | "send_end_hour">
+  Pick<Campaign, "name" | "steps" | "sender_ids" | "daily_limit" | "track_opens" | "track_clicks" | "stop_on_reply" | "include_unsubscribe" | "send_days" | "timezone" | "use_lead_timezone" | "gap_min_minutes" | "gap_max_minutes" | "random_start_minutes" | "send_start_hour" | "send_end_hour">
 >;
 
 export type LeadStatus = "pending" | "in_progress" | "completed" | "replied" | "bounced" | "unsubscribed";
@@ -266,4 +267,47 @@ export interface CampaignLive {
   sent_last_30m: number;
   next_email_at: string | null;
   next_note: string;
+}
+
+export interface ActivityItem {
+  id: string;
+  sent_at: string;
+  campaign_id: string;
+  campaign_name: string;
+  sender_email: string;
+  to_email: string;
+  lead_name: string;
+  subject: string;
+  step: number;
+  variant: string;
+  opened: boolean;
+  clicked: boolean;
+  replied: boolean;
+  bounced: boolean;
+}
+
+export interface InboxSchedule {
+  id: string;
+  email: string;
+  status: SenderStatus;
+  sent_today: number;
+  effective_limit: number;
+  last_sent_at: string | null;
+  next_available_at: string | null;
+}
+
+export interface UpcomingSend {
+  lead_email: string;
+  lead_name: string;
+  campaign_id: string;
+  campaign_name: string;
+  step: number;
+  due_at: string | null;
+}
+
+export interface ActivityData {
+  items: ActivityItem[];
+  inboxes: InboxSchedule[];
+  upcoming: UpcomingSend[];
+  sent_last_hour: number;
 }

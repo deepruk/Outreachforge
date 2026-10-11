@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
-  BarChart3, Inbox, LayoutDashboard, LogOut, Mail, Menu, Plus, Send, Server,
+  Activity, BarChart3, Inbox, LayoutDashboard, LogOut, Mail, Menu, Plus, Send, Server,
 } from "lucide-react";
 import { ApiError, apiGet } from "@/lib/api";
 import { endSession } from "@/lib/session";
@@ -31,6 +31,7 @@ const NAV = [
   { to: "/campaigns", label: "Campaigns", icon: Mail, id: "campaigns" },
   { to: "/inbox", label: "Master Inbox", icon: Inbox, id: "inbox" },
   { to: "/senders", label: "Sender Accounts", icon: Server, id: "senders" },
+  { to: "/activity", label: "Activity Log", icon: Activity, id: "activity" },
   { to: "/analytics", label: "Analytics", icon: BarChart3, id: "analytics" },
 ];
 

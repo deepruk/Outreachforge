@@ -116,6 +116,7 @@ class CampaignUpdate(BaseModel):
     send_days: Optional[list[int]] = Field(default=None, max_length=7)
     timezone: Optional[str] = None
     use_lead_timezone: Optional[bool] = None
+    random_start_minutes: Optional[int] = Field(default=None, ge=0, le=180)
     gap_min_minutes: Optional[int] = Field(default=None, ge=0, le=240)
     gap_max_minutes: Optional[int] = Field(default=None, ge=0, le=240)
     send_start_hour: Optional[int] = Field(default=None, ge=0, le=23)
@@ -152,6 +153,7 @@ class CampaignOut(BaseModel):
     send_days: list[int] = [0, 1, 2, 3, 4, 5, 6]
     timezone: str = "UTC"
     use_lead_timezone: bool = False
+    random_start_minutes: int = 0
     gap_min_minutes: int = 10
     gap_max_minutes: int = 15
     send_start_hour: int
@@ -333,3 +335,46 @@ class CampaignLive(BaseModel):
     sent_last_30m: int
     next_email_at: Optional[datetime] = None
     next_note: str = ""
+
+
+class ActivityItem(BaseModel):
+    id: str
+    sent_at: datetime
+    campaign_id: str
+    campaign_name: str
+    sender_email: str
+    to_email: str
+    lead_name: str
+    subject: str
+    step: int
+    variant: str = "a"
+    opened: bool
+    clicked: bool
+    replied: bool
+    bounced: bool
+
+
+class InboxSchedule(BaseModel):
+    id: str
+    email: str
+    status: SenderStatus
+    sent_today: int
+    effective_limit: int
+    last_sent_at: Optional[datetime] = None
+    next_available_at: Optional[datetime] = None
+
+
+class UpcomingSend(BaseModel):
+    lead_email: str
+    lead_name: str
+    campaign_id: str
+    campaign_name: str
+    step: int
+    due_at: Optional[datetime] = None
+
+
+class ActivityOut(BaseModel):
+    items: list[ActivityItem]
+    inboxes: list[InboxSchedule]
+    upcoming: list[UpcomingSend]
+    sent_last_hour: int
