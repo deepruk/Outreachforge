@@ -37,6 +37,7 @@ export interface SenderUpdate {
 
 export interface Sender {
   id: string;
+  auth_type?: "smtp" | "google_oauth" | string;
   email: string;
   from_name: string;
   smtp_host: string;
