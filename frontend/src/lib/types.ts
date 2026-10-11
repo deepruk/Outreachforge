@@ -143,7 +143,6 @@ export interface Lead extends LeadIn {
   next_send_at: string | null;
   last_sent_at: string | null;
   opened: boolean;
-  open_count: number;
   clicked: boolean;
   created_at: string;
 }
@@ -283,6 +282,7 @@ export interface ActivityItem {
   step: number;
   variant: string;
   opened: boolean;
+  open_count: number;
   clicked: boolean;
   replied: boolean;
   bounced: boolean;
