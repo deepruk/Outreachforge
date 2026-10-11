@@ -58,7 +58,7 @@ def spin(text: str, rnd: "random.Random | None" = None) -> str:
 
 def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_clicks: bool) -> str:
     """Build HTML while preserving safe text escaping and stable per-message tracking IDs."""
-    normalized = (body or "").replace("\\r\\n", "\\n").replace("\\r", "\\n")
+    normalized = (body or "").replace("\r\n", "\n").replace("\r", "\n")
     escaped = html.escape(normalized)
 
     def link(m: re.Match) -> str:
