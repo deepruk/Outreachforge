@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Eye, Loader2, MessageSquareReply, MousePointerClick, Pause, Play, Send, ShieldAlert, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Eye, Gauge, Timer, Workflow, Loader2, MessageSquareReply, MousePointerClick, Pause, Play, Send, ShieldAlert, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
-import type { Analytics, Campaign } from "@/lib/types";
+import type { Analytics, Campaign, CampaignLive } from "@/lib/types";
 import { CAMPAIGN_STATUS, errMsg, fmt, pctFmt } from "@/lib/format";
 import AppShell from "@/components/AppShell";
 import { LeadsTab, SequenceTab, SettingsTab } from "@/components/CampaignTabs";
@@ -12,6 +12,46 @@ import { Panel, PerformanceChart, Pill, RateBar, SeriesToggles, StatCard, type S
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+function useNow(ms = 1000) {
+  const [t, setT] = useState(() => Date.now());
+  useEffect(() => { const id = setInterval(() => setT(Date.now()), ms); return () => clearInterval(id); }, [ms]);
+  return t;
+}
+
+function LiveBar({ campaign }: { campaign: Campaign }) {
+  const live = useQuery({ queryKey: ["campaign-live", campaign.id, campaign.status], queryFn: () => apiGet<CampaignLive>(`/campaigns/${campaign.id}/live`), refetchInterval: 10000 });
+  const nowMs = useNow();
+  const d = live.isError ? undefined : live.data;
+  let next = "N/A";
+  let nextSub = d?.next_note ?? "";
+  if (d?.next_email_at) {
+    const secs = Math.round((new Date(d.next_email_at).getTime() - nowMs) / 1000);
+    next = secs <= 30 ? "Any moment" : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, "0")}s`;
+    if (!nextSub) nextSub = new Date(d.next_email_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+  const pct = d?.capacity_used_pct ?? 0;
+  const items = [
+    { icon: Gauge, label: "Sending capacity", value: d ? `${pct.toFixed(0)}% used` : "—", sub: d ? `${d.sent_today}/${d.daily_capacity} today` : "", tone: pct >= 100 ? "text-amber-300" : "text-emerald-300", id: "capacity" },
+    { icon: Workflow, label: "Active sequences", value: d ? fmt(d.active_sequences) : "—", sub: "leads still in sequence", tone: "text-white", id: "active" },
+    { icon: Send, label: "Emails sent (30m)", value: d ? fmt(d.sent_last_30m) : "—", sub: `gap ${campaign.gap_min_minutes}–${campaign.gap_max_minutes} min per inbox`, tone: "text-white", id: "sent30" },
+    { icon: Timer, label: "Next email in", value: next, sub: nextSub, tone: d?.next_email_at ? "text-cyan" : "text-slate-400", id: "next" },
+  ];
+  return (
+    <div className="mb-6 grid grid-cols-2 divide-[#1E293B] overflow-hidden rounded-xl border border-[#1E293B] bg-panel lg:grid-cols-4 lg:divide-x" data-testid="campaign-live-bar">
+      {items.map((it) => (
+        <div key={it.id} className="flex items-center gap-3 px-5 py-3.5" data-testid={`live-${it.id}`}>
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#1E293B]"><it.icon className="size-4 text-cyan" /></span>
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-slate-500">{it.label}</p>
+            <p className={`font-mono text-[15px] font-semibold ${it.tone}`} data-testid={`live-${it.id}-value`}>{it.value}</p>
+            {it.sub && <p className="truncate text-[11px] text-slate-500" data-testid={`live-${it.id}-sub`}>{it.sub}</p>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function Overview({ campaign }: { campaign: Campaign }) {
   const [visible, setVisible] = useState<SeriesKey[]>(["sent", "opened", "clicked", "replied"]);
@@ -81,6 +121,7 @@ export default function CampaignDetail() {
   const refresh = (data: Campaign) => {
     qc.setQueryData(["campaign", id], data);
     qc.invalidateQueries({ queryKey: ["campaigns"] });
+    qc.invalidateQueries({ queryKey: ["campaign-live", id] });
   };
   const launch = useMutation({
     mutationFn: () => apiPost<Campaign>(`/campaigns/${id}/launch`),
@@ -134,6 +175,8 @@ export default function CampaignDetail() {
       </div>
 
       {camp && (
+        <>
+        <LiveBar campaign={camp} />
         <Tabs value={tab} onValueChange={(v) => setParams({ tab: String(v) })}>
           <TabsList variant="line" className="mb-6 border-b border-[#1E293B] w-full justify-start rounded-none">
             {[["overview", "Overview"], ["leads", `Leads (${camp.stats.leads})`], ["sequence", "Sequence"], ["settings", "Settings"]].map(([k, l]) => (
@@ -145,6 +188,7 @@ export default function CampaignDetail() {
           <TabsContent value="sequence" className="animate-fade-up"><SequenceTab key={camp.steps.map((s) => s.id).join()} campaign={camp} /></TabsContent>
           <TabsContent value="settings" className="animate-fade-up"><SettingsTab campaign={camp} /></TabsContent>
         </Tabs>
+        </>
       )}
 
       <Dialog open={confirmDel} onOpenChange={setConfirmDel}>

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Clock, FileUp, Globe, Loader2, Plus, Save, Search, Shuffle, Trash2, Upload, UserPlus } from "lucide-react";
+import { CalendarDays, Clock, Timer, FileUp, Globe, Loader2, Plus, Save, Search, Shuffle, Trash2, Upload, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 import type { Campaign, Lead, LeadImportResult, LeadIn, Sender, Step } from "@/lib/types";
@@ -526,6 +526,7 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
     track_opens: campaign.track_opens, track_clicks: campaign.track_clicks, stop_on_reply: campaign.stop_on_reply,
     include_unsubscribe: campaign.include_unsubscribe,
     send_days: campaign.send_days, timezone: campaign.timezone, use_lead_timezone: campaign.use_lead_timezone,
+    gap_min_minutes: campaign.gap_min_minutes, gap_max_minutes: campaign.gap_max_minutes,
     send_start_hour: campaign.send_start_hour, send_end_hour: campaign.send_end_hour,
   });
   const save = useMutation({
@@ -600,6 +601,30 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
                   <SelectContent>{HOURS.slice(1).map((h) => <SelectItem key={h} value={String(h)}>{hourLabel(h)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2 rounded-lg border border-[#1E293B] bg-[#0B0F17] p-4" data-testid="settings-gap-section">
+              <p className="flex items-center gap-1.5 text-sm font-medium text-slate-100"><Timer className="size-4 text-cyan" />Gap between emails</p>
+              <p className="text-xs text-slate-500">After each email, that inbox waits a random time in this range before sending the next one, so sending looks human.</p>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Input type="number" min={0} max={240} value={s.gap_min_minutes} onChange={(e) => setS({ ...s, gap_min_minutes: Math.min(240, Math.max(0, Number(e.target.value) || 0)) })} className="w-20" data-testid="settings-gap-min-input" />
+                <span className="text-sm text-slate-400">to</span>
+                <Input type="number" min={0} max={240} value={s.gap_max_minutes} onChange={(e) => setS({ ...s, gap_max_minutes: Math.min(240, Math.max(0, Number(e.target.value) || 0)) })} className="w-20" data-testid="settings-gap-max-input" />
+                <span className="text-sm text-slate-400">minutes</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {[[2, 5], [5, 10], [10, 15], [15, 30]].map(([a, b]) => (
+                  <button key={a} type="button" onClick={() => setS({ ...s, gap_min_minutes: a, gap_max_minutes: b })}
+                    className={cn("rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors", s.gap_min_minutes === a && s.gap_max_minutes === b ? "border-cyan-500/50 bg-cyan-500/10 text-cyan" : "border-[#263247] text-slate-400 hover:text-slate-200")}
+                    data-testid={`settings-gap-preset-${a}-${b}`}>{a}–{b} min</button>
+                ))}
+              </div>
+              {s.gap_min_minutes > s.gap_max_minutes && <p className="text-xs text-amber-300">Min is above max — they'll be swapped on save.</p>}
+              {(() => {
+                const avg = (s.gap_min_minutes + s.gap_max_minutes) / 2;
+                const hrs = s.send_end_hour - s.send_start_hour;
+                const per = avg > 0 ? Math.floor((hrs * 60) / avg) : null;
+                return <p className="text-xs text-slate-400" data-testid="settings-gap-summary">{per === null ? "No gap — inboxes send as fast as the engine runs." : `≈ ${per} emails per inbox per day max in a ${hrs}h window (×${s.sender_ids.length} inboxes).`}</p>;
+              })()}
             </div>
             <div className="space-y-1.5">
               <Label>Campaign timezone</Label>

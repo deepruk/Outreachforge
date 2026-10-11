@@ -5,11 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from lib.auth import current_user
 from lib.db import db
-from lib.engine import decide_winner, zone
+from lib.engine import decide_winner, in_send_window, zone
+from lib.util import start_of_today, warmup_info
+from datetime import timedelta
 from lib.stats import PROJ, build_series, build_steps, campaign_totals, totals_from
 from lib.util import new_id, now
 from models.schemas import (
-    AnalyticsOut, CampaignCreate, CampaignOut, CampaignUpdate, LeadImport, LeadImportResult,
+    AnalyticsOut, CampaignCreate, CampaignLive, CampaignOut, CampaignUpdate, LeadImport, LeadImportResult,
     LeadOut, StatTotals,
 )
 
@@ -53,7 +55,8 @@ async def create_campaign(body: CampaignCreate, user: dict = Depends(current_use
         "steps": [{**s, "id": new_id()} for s in DEFAULT_STEPS],
         "sender_ids": [s["id"] for s in senders], "daily_limit": 100, "track_opens": True,
         "track_clicks": True, "stop_on_reply": True, "include_unsubscribe": True, "custom_fields": [],
-        "send_days": [0, 1, 2, 3, 4], "timezone": "UTC", "use_lead_timezone": False, "send_start_hour": 0, "send_end_hour": 24,
+        "send_days": [0, 1, 2, 3, 4], "timezone": "UTC", "use_lead_timezone": False,
+        "gap_min_minutes": 10, "gap_max_minutes": 15, "send_start_hour": 0, "send_end_hour": 24,
         "created_at": now(), "launched_at": None,
     }
     await db.campaigns.insert_one(c)
@@ -80,6 +83,10 @@ async def update_campaign(cid: str, body: CampaignUpdate, user: dict = Depends(c
                 s["ab_winner"] = None
             steps.append({**s, "id": s["id"] if prev else new_id()})
         upd["steps"] = steps
+    lo = upd.get("gap_min_minutes", cur.get("gap_min_minutes", 10))
+    hi = upd.get("gap_max_minutes", cur.get("gap_max_minutes", 15))
+    if "gap_min_minutes" in upd or "gap_max_minutes" in upd:
+        upd["gap_min_minutes"], upd["gap_max_minutes"] = min(lo, hi), max(lo, hi)
     if "send_days" in upd:
         upd["send_days"] = sorted({d for d in upd["send_days"] if 0 <= d <= 6})
     if "timezone" in upd and not zone(upd["timezone"]):
@@ -133,6 +140,45 @@ async def campaign_analytics(cid: str, days: int = Query(14, ge=1, le=365), user
     leads = await db.leads.count_documents({"campaign_id": cid})
     return AnalyticsOut(totals=StatTotals(**totals_from(msgs, leads)), series=build_series(msgs, days),
                         campaigns=[], steps=build_steps(msgs, c.get("steps") or []))
+
+
+@router.get("/{cid}/live", response_model=CampaignLive)
+async def campaign_live(cid: str, user: dict = Depends(current_user)):
+    """Live sending status: capacity, active sequences, last-30m volume and when the next email goes out."""
+    c = await _get(user, cid)
+    n = now()
+    senders = await db.senders.find({"id": {"$in": c.get("sender_ids", [])}}, {"_id": 0}).to_list(100)
+    usable = [s for s in senders if s["status"] in ("active", "demo")]
+    sent_today = await db.messages.count_documents({"campaign_id": cid, "sent_at": {"$gte": start_of_today()}})
+    inbox_cap = sum(warmup_info(s)[0] for s in usable)
+    cap = min(c.get("daily_limit", 100), inbox_cap) if usable else 0
+    active = await db.leads.count_documents({"campaign_id": cid, "status": {"$in": ["pending", "in_progress"]}})
+    last30 = await db.messages.count_documents({"campaign_id": cid, "sent_at": {"$gte": n - timedelta(minutes=30)}})
+    out = CampaignLive(capacity_used_pct=round(sent_today * 100 / cap, 1) if cap else 0, sent_today=sent_today,
+                       daily_capacity=cap, active_sequences=active, sent_last_30m=last30)
+    if c["status"] != "active":
+        out.next_note = "Campaign is not active"
+    elif not usable:
+        out.next_note = "No usable sender accounts"
+    elif not active:
+        out.next_note = "No leads left to email"
+    elif sent_today >= c.get("daily_limit", 100):
+        out.next_note = "Daily campaign limit reached"
+    else:
+        due = await db.leads.find_one({"campaign_id": cid, "status": {"$in": ["pending", "in_progress"]}},
+                                      {"_id": 0}, sort=[("next_send_at", 1)])
+        lead_at = (due or {}).get("next_send_at") or n
+        free = []
+        for s in usable:
+            if await db.messages.count_documents({"sender_id": s["id"], "sent_at": {"$gte": start_of_today()}}) < warmup_info(s)[0]:
+                free.append(s.get("next_available_at") or n)
+        if not free:
+            out.next_note = "All inboxes hit today's limit"
+        else:
+            out.next_email_at = max(lead_at, min(free), n)
+            if due and not in_send_window(c, due) and out.next_email_at <= n + timedelta(minutes=1):
+                out.next_note = "Waiting for the sending window"
+    return out
 
 
 # ---------- leads ----------

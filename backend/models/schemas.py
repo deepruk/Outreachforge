@@ -116,6 +116,8 @@ class CampaignUpdate(BaseModel):
     send_days: Optional[list[int]] = Field(default=None, max_length=7)
     timezone: Optional[str] = None
     use_lead_timezone: Optional[bool] = None
+    gap_min_minutes: Optional[int] = Field(default=None, ge=0, le=240)
+    gap_max_minutes: Optional[int] = Field(default=None, ge=0, le=240)
     send_start_hour: Optional[int] = Field(default=None, ge=0, le=23)
     send_end_hour: Optional[int] = Field(default=None, ge=1, le=24)
 
@@ -150,6 +152,8 @@ class CampaignOut(BaseModel):
     send_days: list[int] = [0, 1, 2, 3, 4, 5, 6]
     timezone: str = "UTC"
     use_lead_timezone: bool = False
+    gap_min_minutes: int = 10
+    gap_max_minutes: int = 15
     send_start_hour: int
     send_end_hour: int
     created_at: datetime
@@ -319,3 +323,13 @@ class Notification(BaseModel):
 class NotificationList(BaseModel):
     items: list[Notification]
     unread: int
+
+
+class CampaignLive(BaseModel):
+    capacity_used_pct: float
+    sent_today: int
+    daily_capacity: int
+    active_sequences: int
+    sent_last_30m: int
+    next_email_at: Optional[datetime] = None
+    next_note: str = ""

@@ -1,6 +1,7 @@
 """Background workers: campaign sender + IMAP reply sync."""
 import asyncio
 import logging
+import random
 import os
 import re
 from datetime import timedelta
@@ -122,6 +123,16 @@ def in_send_window(c: dict, lead: dict) -> bool:
     return c.get("send_start_hour", 0) <= local.hour < c.get("send_end_hour", 24)
 
 
+def gap_range(c: dict) -> tuple[int, int]:
+    lo, hi = int(c.get("gap_min_minutes", 10)), int(c.get("gap_max_minutes", 15))
+    return min(lo, hi), max(lo, hi)
+
+
+def sender_ready(s: dict) -> bool:
+    t = s.get("next_available_at")
+    return t is None or t <= now()
+
+
 async def process_campaign(c: dict) -> None:
     n = now()
     if c.get("send_days") == []:
@@ -147,7 +158,7 @@ async def process_campaign(c: dict) -> None:
             break
         if not in_send_window(c, lead):
             continue
-        avail = [s for s in senders if capacity.get(s["id"], 0) > 0]
+        avail = [s for s in senders if capacity.get(s["id"], 0) > 0 and sender_ready(s)]
         if not avail:
             break
         idx = lead.get("current_step", 0)
@@ -201,6 +212,10 @@ async def process_campaign(c: dict) -> None:
         })
         capacity[sender["id"]] -= 1
         sent_now += 1
+        # gap: this inbox rests a random min–max minutes before its next email (any campaign)
+        lo, hi = gap_range(c)
+        sender["next_available_at"] = now() + timedelta(seconds=random.uniform(lo * 60, hi * 60))
+        await db.senders.update_one({"id": sender["id"]}, {"$set": {"next_available_at": sender["next_available_at"]}})
         nxt = idx + 1
         upd: dict = {"current_step": nxt, "last_sent_at": now(), "sender_id": sender["id"]}
         if nxt >= len(steps):
