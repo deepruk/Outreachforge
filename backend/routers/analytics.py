@@ -45,37 +45,57 @@ async def analytics(days: int = Query(14, ge=1, le=365), user: dict = Depends(cu
 # ---------- public tracking endpoints (no auth: hit by recipients' mail clients) ----------
 @router.get("/t/o/{mid}.gif")
 async def track_open(mid: str, request: Request):
+    """Record first and repeat opens, filtering obvious security scanners."""
     user_agent = request.headers.get("user-agent", "").lower()
-    # Always serve the pixel, but do not count obvious automated scanner requests.
     if any(marker in user_agent for marker in AUTOMATED_OPEN_UA):
-        return Response(content=PIXEL, media_type="image/gif",
-                        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
-    m = await db.messages.find_one({"id": mid}, {"_id": 0, "opened_at": 1})
+        return Response(content=PIXEL, media_type="image/gif", headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"
+        })
+    m = await db.messages.find_one(
+        {"id": mid}, {"_id": 0, "lead_id": 1, "campaign_id": 1}
+    )
     if m is not None:
-        upd: dict = {"$inc": {"open_count": 1}}
-        if not m.get("opened_at"):
-            upd["$set"] = {"opened_at": now()}
-        await db.messages.update_one({"id": mid}, upd)
-    return Response(content=PIXEL, media_type="image/gif",
-                    headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
+        at = now()
+        first = await db.messages.update_one(
+            {"id": mid, "$or": [{"opened_at": {"$exists": False}}, {"opened_at": None}]},
+            {"$set": {"opened_at": at}},
+        )
+        await db.messages.update_one(
+            {"id": mid}, {"$inc": {"open_count": 1}, "$set": {"last_opened_at": at}}
+        )
+        if first.modified_count == 1:
+            await db.leads.update_one({"id": m["lead_id"]}, {"$set": {"opened_at": at}})
+            await db.campaigns.update_one(
+                {"id": m["campaign_id"]}, {"$inc": {"total_opens": 1, "unique_opens": 1}}
+            )
+    return Response(content=PIXEL, media_type="image/gif", headers={
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"
+    })
 
 
 @router.get("/t/c/{mid}")
 async def track_click(mid: str, u: str = ""):
+    """Count first and repeat clicks, then redirect only to HTTP(S) destinations."""
     url = unquote(u)
     if not url.startswith(("http://", "https://")):
-        url = "https://" + url.lstrip("/") if url else "https://www.google.com"
-    m = await db.messages.find_one({"id": mid}, {"_id": 0, "clicked_at": 1, "opened_at": 1})
+        return RedirectResponse("https://www.google.com", status_code=302)
+    m = await db.messages.find_one(
+        {"id": mid}, {"_id": 0, "lead_id": 1, "campaign_id": 1}
+    )
     if m is not None:
-        upd: dict = {"$inc": {"click_count": 1}}
-        sets = {}
-        if not m.get("clicked_at"):
-            sets["clicked_at"] = now()
-        if not m.get("opened_at"):
-            sets["opened_at"] = now()  # a click implies an open (images may be blocked)
-        if sets:
-            upd["$set"] = sets
-        await db.messages.update_one({"id": mid}, upd)
+        at = now()
+        first = await db.messages.update_one(
+            {"id": mid, "$or": [{"clicked_at": {"$exists": False}}, {"clicked_at": None}]},
+            {"$set": {"clicked_at": at}},
+        )
+        await db.messages.update_one(
+            {"id": mid}, {"$inc": {"click_count": 1}, "$set": {"last_clicked_at": at}}
+        )
+        if first.modified_count == 1:
+            await db.leads.update_one({"id": m["lead_id"]}, {"$set": {"clicked_at": at}})
+            await db.campaigns.update_one(
+                {"id": m["campaign_id"]}, {"$inc": {"total_clicks": 1, "unique_clicks": 1}}
+            )
     return RedirectResponse(url, status_code=302)
 
 
