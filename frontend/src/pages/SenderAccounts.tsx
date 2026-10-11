@@ -95,7 +95,7 @@ function EditLimitsDialog({ sender, onClose }: { sender: Sender | null; onClose:
   );
 }
 
-function TestResult({ r }: { r: ConnectionTest }) {
+function TestResult({ r, authType = "smtp" }: { r: ConnectionTest; authType?: string }) {
   const row = (ok: boolean, label: string, err: string) => (
     <div className="flex items-start gap-2 text-sm">
       {ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" /> : <XCircle className="mt-0.5 size-4 shrink-0 text-red-400" />}
@@ -104,8 +104,8 @@ function TestResult({ r }: { r: ConnectionTest }) {
   );
   return (
     <div className="space-y-2 rounded-lg border border-border bg-background p-3" data-testid="connection-test-result">
-      {row(r.smtp_ok, "SMTP (sending)", r.smtp_error)}
-      {row(r.imap_ok, "IMAP (reply sync)", r.imap_error)}
+      {row(r.smtp_ok, authType === "google_oauth" ? "Gmail API (sending)" : "SMTP (sending)", r.smtp_error)}
+      {row(r.imap_ok, authType === "google_oauth" ? "Gmail API (reply sync)" : "IMAP (reply sync)", r.imap_error)}
     </div>
   );
 }
@@ -302,6 +302,7 @@ export default function SenderAccounts() {
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <Pill cls={SENDER_STATUS[s.status].cls} testId={`sender-status-${s.id}`}>{SENDER_STATUS[s.status].label}</Pill>
+                {s.auth_type === "google_oauth" && <Pill cls="border-blue-500/30 bg-blue-500/10 text-blue-300">Google OAuth</Pill>}
                 {s.warmup_enabled && (
                   <Pill cls={s.effective_limit < s.daily_limit ? "border-orange-500/30 bg-orange-500/10 text-orange-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"} testId={`sender-warmup-${s.id}`}>
                     <Flame className="size-3" />{s.effective_limit < s.daily_limit ? `Warm-up day ${s.warmup_day}` : "Warm-up complete"}
@@ -324,7 +325,7 @@ export default function SenderAccounts() {
                   <RateBar value={(s.effective_limit / s.daily_limit) * 100} color="bg-orange-400" />
                 </div>
               )}
-              {testRes?.id === s.id && <div className="mt-4"><TestResult r={testRes.r} /></div>}
+              {testRes?.id === s.id && <div className="mt-4"><TestResult r={testRes.r} authType={s.auth_type} /></div>}
             </div>
           ))}
         </div>
