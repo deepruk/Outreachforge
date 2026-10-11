@@ -350,6 +350,7 @@ class ActivityItem(BaseModel):
     step: int
     variant: str = "a"
     opened: bool
+    open_count: int = 0
     clicked: bool
     replied: bool
     bounced: bool

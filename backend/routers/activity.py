@@ -31,8 +31,10 @@ async def activity(campaign_id: Optional[str] = None, limit: int = Query(50, ge=
             campaign_name=camps.get(m["campaign_id"], {}).get("name", "—"), sender_email=semail.get(m["sender_id"], "removed inbox"),
             to_email=m["to_email"], lead_name=f"{l.get('first_name', '')} {l.get('last_name', '')}".strip(),
             subject=m["subject"], step=m.get("step_index", 0) + 1, variant=m.get("variant") or "a",
-            opened=bool(m.get("opened_at")), clicked=bool(m.get("clicked_at")), replied=bool(m.get("replied_at")),
-            bounced=bool(m.get("bounced"))))
+            opened=bool(m.get("opened_at") or (m.get("open_count") or 0) > 0),
+            open_count=int(m.get("open_count") or 0),
+            clicked=bool(m.get("clicked_at") or (m.get("click_count") or 0) > 0),
+            replied=bool(m.get("replied_at")), bounced=bool(m.get("bounced"))))
     inboxes = []
     for s in senders:
         last = await db.messages.find_one({"sender_id": s["id"]}, {"_id": 0, "sent_at": 1}, sort=[("sent_at", -1)])

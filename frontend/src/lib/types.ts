@@ -282,6 +282,7 @@ export interface ActivityItem {
   step: number;
   variant: string;
   opened: boolean;
+  open_count: number;
   clicked: boolean;
   replied: boolean;
   bounced: boolean;
