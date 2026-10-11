@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import secrets
 from datetime import timedelta
@@ -16,6 +17,7 @@ from lib.util import new_id, now, start_of_today, warmup_info
 from models.schemas import ConnectionTestOut, SenderIn, SenderOut, SenderUpdate
 
 router = APIRouter(prefix="/senders", tags=["senders"])
+log = logging.getLogger(__name__)
 
 GOOGLE_SCOPES = (
     "openid email https://www.googleapis.com/auth/gmail.send "
@@ -155,8 +157,9 @@ async def google_oauth_callback(request: Request):
             }
             await db.senders.insert_one(doc)
         return RedirectResponse(frontend + "/senders?google_oauth=connected", status_code=303)
-    except Exception:
-        # Keep credentials and provider response bodies out of logs and redirect URLs.
+    except Exception as exc:
+        # Log only the exception class; provider bodies and credentials can contain sensitive data.
+        log.warning("Google OAuth callback failed (%s)", type(exc).__name__)
         return RedirectResponse(frontend + "/senders?google_oauth=error&reason=authorization_failed", status_code=303)
 
 
