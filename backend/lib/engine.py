@@ -242,7 +242,7 @@ async def process_campaign(c: dict) -> None:
         sender["next_available_at"] = now() + timedelta(seconds=random.uniform(lo * 60, hi * 60))
         await db.senders.update_one({"id": sender["id"]}, {"$set": {"next_available_at": sender["next_available_at"]}})
         nxt = idx + 1
-        upd: dict = {"current_step": nxt, "last_sent_at": now(), "sender_id": sender["id"]}
+        upd: dict = {"current_step": nxt, "last_sent_at": now(), "last_subject": subject, "sender_id": sender["id"]}
         if nxt >= len(steps):
             upd.update(status="completed", next_send_at=None)
         else:
