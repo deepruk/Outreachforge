@@ -99,6 +99,21 @@ async def track_click(mid: str, u: str = ""):
     return RedirectResponse(url, status_code=302)
 
 
+
+@router.get("/t/debug/{mid}")
+async def tracking_debug(mid: str, user: dict = Depends(current_user)):
+    """Authenticated diagnostic for one of the current user's messages."""
+    row = await db.messages.find_one(
+        {"id": mid, "user_id": user["id"]},
+        {"_id": 0, "id": 1, "campaign_id": 1, "lead_id": 1, "opened_at": 1,
+         "open_count": 1, "last_opened_at": 1, "clicked_at": 1, "click_count": 1, "last_clicked_at": 1,
+         "replied_at": 1},
+    )
+    if not row:
+        return {"ok": False, "detail": "Message not found"}
+    return {"ok": True, "message": row}
+
+
 UNSUB_PAGE = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Unsubscribed</title></head><body style="margin:0;background:#0B0F17;font-family:Arial,sans-serif;color:#F8FAFC;
 display:flex;min-height:100vh;align-items:center;justify-content:center"><div style="max-width:420px;padding:40px;
