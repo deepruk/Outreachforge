@@ -193,3 +193,45 @@ local-run instructions above.
   Vite HMR for the frontend); no rebuild step needed for normal iteration. A
   restart is still needed after changing `.env`, `requirements.txt`, or
   `vite.config.ts`.
+
+
+## Google Gmail OAuth sender connection
+
+The sender settings page includes **Continue with Google**. Gmail OAuth uses the Gmail API (gmail.send + gmail.readonly) rather than storing a Gmail password or using SMTP/IMAP App Passwords. Refresh tokens are encrypted with Fernet before they are stored in MongoDB; the encryption key must remain stable and be backed up securely.
+
+### Render environment variables
+
+Set these on the **backend Web Service**:
+
+- GOOGLE_CLIENT_ID — OAuth 2.0 client ID from Google Cloud.
+- GOOGLE_CLIENT_SECRET — OAuth 2.0 client secret (backend only).
+- GOOGLE_REDIRECT_URI — exact callback URL, e.g. https://outreachforge.onrender.com/api/senders/google/oauth/callback.
+- GOOGLE_OAUTH_FRONTEND_URL — frontend origin only, e.g. https://outreachforge-1.onrender.com (no trailing slash).
+- GOOGLE_TOKEN_ENCRYPTION_KEY — Fernet key generated with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())". Keep it secret and stable; changing it makes previously stored refresh tokens unreadable.
+- CORS_ORIGINS — exact frontend origin, e.g. https://outreachforge-1.onrender.com (avoid * for a production credentialed setup).
+- JWT_SECRET — a strong, stable session signing secret; do not use the development fallback.
+
+Set this on the **frontend Static Site** and redeploy (Vite reads it at build time):
+
+- VITE_API_URL — backend origin only, e.g. https://outreachforge.onrender.com (no trailing slash).
+
+### Google Cloud setup
+
+1. Create/select a Google Cloud project and enable **Gmail API**.
+2. Configure the OAuth consent screen and add the app name, support email, and authorized domains as appropriate.
+3. Create an OAuth client ID of type **Web application**.
+4. Add the exact value of GOOGLE_REDIRECT_URI under **Authorized redirect URIs**.
+5. Configure the consent screen's test users while the app is in testing mode.
+6. Authorize the scopes openid, email, https://www.googleapis.com/auth/gmail.send, and https://www.googleapis.com/auth/gmail.readonly.
+
+The gmail.readonly scope is restricted. Before offering Gmail OAuth broadly in production, review Google's current OAuth verification and restricted-scope requirements. A test-mode app can only be used by configured test users and may show an unverified-app warning.
+
+### Flow and behavior
+
+- A signed-in user starts OAuth from Sender Accounts. A random, single-use state tied to that user expires after 10 minutes.
+- The backend exchanges the one-time code, verifies the Google account's email, encrypts the refresh token, and attaches the sender to the same application user.
+- Sending and reply sync use the Gmail API. The browser never receives the client secret or refresh token.
+- Removing a sender deletes the stored encrypted refresh token with the sender record. Users can also revoke access in their Google Account security settings.
+- OAuth sends default to a conservative daily limit of 10. Adjust limits gradually and comply with Google's sending policies.
+
+After setting the environment variables, redeploy both services and test with a dedicated Gmail account before using a production mailbox.

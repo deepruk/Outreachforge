@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Flame, Loader2, MoreHorizontal, Pause, Play, Plug, Plus, Server, SlidersHorizontal, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+import { API_BASE, apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import type { ConnectionTest, Sender, SenderIn, SenderUpdate } from "@/lib/types";
 import { Switch } from "@/components/ui/switch";
 import { SENDER_STATUS, errMsg, fmt, timeAgo } from "@/lib/format";
@@ -95,7 +95,7 @@ function EditLimitsDialog({ sender, onClose }: { sender: Sender | null; onClose:
   );
 }
 
-function TestResult({ r }: { r: ConnectionTest }) {
+function TestResult({ r, authType = "smtp" }: { r: ConnectionTest; authType?: string }) {
   const row = (ok: boolean, label: string, err: string) => (
     <div className="flex items-start gap-2 text-sm">
       {ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" /> : <XCircle className="mt-0.5 size-4 shrink-0 text-red-400" />}
@@ -104,8 +104,8 @@ function TestResult({ r }: { r: ConnectionTest }) {
   );
   return (
     <div className="space-y-2 rounded-lg border border-border bg-background p-3" data-testid="connection-test-result">
-      {row(r.smtp_ok, "SMTP (sending)", r.smtp_error)}
-      {row(r.imap_ok, "IMAP (reply sync)", r.imap_error)}
+      {row(r.smtp_ok, authType === "google_oauth" ? "Gmail API (sending)" : "SMTP (sending)", r.smtp_error)}
+      {row(r.imap_ok, authType === "google_oauth" ? "Gmail API (reply sync)" : "IMAP (reply sync)", r.imap_error)}
     </div>
   );
 }
@@ -149,6 +149,11 @@ function AddSenderDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
             <DialogDescription>{PRESETS[preset].hint}</DialogDescription>
           </DialogHeader>
           <div className="my-5 space-y-5">
+            <Button type="button" variant="outline" className="w-full justify-center gap-2 border-blue-500/40" onClick={() => { window.location.assign(`${API_BASE}/api/senders/google/oauth/start`); }} data-testid="connect-google-oauth-button">
+              <span className="grid size-5 place-items-center rounded-full bg-white text-xs font-bold text-blue-600">G</span>
+              Continue with Google
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">Secure OAuth connection. No Gmail password or App Password required.</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {Object.entries(PRESETS).map(([k, p]) => (
                 <button key={k} type="button" onClick={() => applyPreset(k)} data-testid={`sender-preset-${k}`}
@@ -214,6 +219,24 @@ export default function SenderAccounts() {
   const [editing, setEditing] = useState<Sender | null>(null);
   const senders = useQuery({ queryKey: ["senders"], queryFn: () => apiGet<Sender[]>("/senders") });
   const inv = () => qc.invalidateQueries({ queryKey: ["senders"] });
+  useEffect(() => {
+    const status = params.get("google_oauth");
+    if (!status) return;
+    if (status === "connected") {
+      toast.success("Gmail connected with Google OAuth");
+      qc.invalidateQueries({ queryKey: ["senders"] });
+    } else {
+      const reason = params.get("reason");
+      const message = reason === "consent_denied" ? "Google authorization was cancelled."
+        : reason === "state_expired" ? "Google authorization expired. Please try again."
+        : "Could not connect Gmail. Check the Google OAuth configuration and try again.";
+      toast.error(message);
+    }
+    const next = new URLSearchParams(params);
+    next.delete("google_oauth");
+    next.delete("reason");
+    setParams(next, { replace: true });
+  }, [params, setParams, qc]);
   const patch = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<Pick<Sender, "status" | "daily_limit">> }) => apiPatch<Sender>(`/senders/${id}`, body),
     onSuccess: () => { inv(); toast.success("Sender updated"); },
@@ -279,6 +302,7 @@ export default function SenderAccounts() {
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <Pill cls={SENDER_STATUS[s.status].cls} testId={`sender-status-${s.id}`}>{SENDER_STATUS[s.status].label}</Pill>
+                {s.auth_type === "google_oauth" && <Pill cls="border-blue-500/30 bg-blue-500/10 text-blue-300">Google OAuth</Pill>}
                 {s.warmup_enabled && (
                   <Pill cls={s.effective_limit < s.daily_limit ? "border-orange-500/30 bg-orange-500/10 text-orange-300" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"} testId={`sender-warmup-${s.id}`}>
                     <Flame className="size-3" />{s.effective_limit < s.daily_limit ? `Warm-up day ${s.warmup_day}` : "Warm-up complete"}
@@ -301,7 +325,7 @@ export default function SenderAccounts() {
                   <RateBar value={(s.effective_limit / s.daily_limit) * 100} color="bg-orange-400" />
                 </div>
               )}
-              {testRes?.id === s.id && <div className="mt-4"><TestResult r={testRes.r} /></div>}
+              {testRes?.id === s.id && <div className="mt-4"><TestResult r={testRes.r} authType={s.auth_type} /></div>}
             </div>
           ))}
         </div>
