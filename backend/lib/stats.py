@@ -67,8 +67,8 @@ def build_steps(msgs: list[dict], steps: list[dict]) -> list[dict]:
         ms = [m for m in msgs if m.get("step_index") == i]
         out.append({
             "step": i + 1, "subject": st.get("subject") or f"Follow-up {i}",
-            "sent": len(ms), "opened": sum(1 for m in ms if m.get("opened_at")),
-            "clicked": sum(1 for m in ms if m.get("clicked_at")),
+            "sent": len(ms), "opened": sum(1 for m in ms if m.get("opened_at") or (m.get("open_count") or 0) > 0),
+            "clicked": sum(1 for m in ms if m.get("clicked_at") or (m.get("click_count") or 0) > 0),
             "replied": sum(1 for m in ms if m.get("replied_at")),
             "ab_winner": st.get("ab_winner"),
             "variants": variant_stats(ms, st) if (st.get("subject_b") or "").strip() else [],
