@@ -66,8 +66,8 @@ def access_token(sender: dict) -> str:
     return data["access_token"]
 
 
-def _request(method: str, path: str, sender: dict, **kwargs) -> requests.Response:
-    token = access_token(sender)
+def _request(method: str, path: str, sender: dict, *, bearer_token: str | None = None, **kwargs) -> requests.Response:
+    token = bearer_token or access_token(sender)
     headers = kwargs.pop("headers", {})
     headers["Authorization"] = f"Bearer {token}"
     try:
@@ -132,14 +132,41 @@ def _body_from_part(part: dict) -> str:
     return ""
 
 
+
+def _text_from_message(msg: email.message.Message) -> str:
+    html_fallback = ""
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_disposition() == "attachment":
+                continue
+            content_type = part.get_content_type()
+            if content_type not in ("text/plain", "text/html"):
+                continue
+            payload = part.get_payload(decode=True) or b""
+            text = payload.decode(part.get_content_charset() or "utf-8", "replace")
+            if content_type == "text/plain":
+                return text
+            if not html_fallback:
+                import re
+                html_fallback = re.sub(r"<[^>]+>", " ", text)
+        return html_fallback
+    payload = msg.get_payload(decode=True) or b""
+    text = payload.decode(msg.get_content_charset() or "utf-8", "replace")
+    if msg.get_content_type() == "text/html":
+        import re
+        return re.sub(r"<[^>]+>", " ", text)
+    return text
+
+
 def fetch_new(sender: dict, last_cursor: int) -> tuple[list[dict], int]:
     """Fetch inbox messages after the stored Unix timestamp cursor (first sync: last 7 days)."""
     query = f"in:inbox after:{int(last_cursor)}" if last_cursor else "in:inbox newer_than:7d"
-    listed = _request("GET", "/messages", sender, params={"q": query, "maxResults": 100})
+    token = access_token(sender)
+    listed = _request("GET", "/messages", sender, bearer_token=token, params={"q": query, "maxResults": 100})
     refs = listed.json().get("messages") or []
     out: list[dict] = []
     for ref in refs:
-        message = _request("GET", f"/messages/{ref['id']}", sender, params={"format": "raw"}).json()
+        message = _request("GET", f"/messages/{ref['id']}", sender, bearer_token=token, params={"format": "raw"}).json()
         raw = message.get("raw")
         if not raw:
             continue
@@ -157,7 +184,7 @@ def fetch_new(sender: dict, last_cursor: int) -> tuple[list[dict], int]:
             "message_id": (msg.get("Message-ID") or "").strip(),
             "in_reply_to": (msg.get("In-Reply-To") or "").strip(),
             "references": (msg.get("References") or "").strip(),
-            "body": _body_from_part(message.get("payload") or {}),
+            "body": _text_from_message(msg),
         })
     # Cursor is a Unix timestamp, not a Gmail message ID. Gmail search accepts epoch seconds.
     return out, int(time.time())
