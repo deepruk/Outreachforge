@@ -1,5 +1,3 @@
-from unittest.mock import AsyncMock
-
 import pytest
 
 from routers import analytics
@@ -44,7 +42,7 @@ class FakeDB:
 async def test_open_tracking_records_first_and_repeat_open(monkeypatch):
     fake = FakeDB({"id": "m1", "lead_id": "l1", "campaign_id": "c1", "opened_at": None})
     monkeypatch.setattr(analytics, "db", fake)
-    monkeypatch.setattr(analytics, "now", lambda: "now")
+    monkeypatch.setattr(analytics, "now", lambda: __import__("datetime").datetime.now(__import__("datetime").timezone.utc))
     resp = await analytics.track_open("m1", type("Req", (), {"headers": {"user-agent": "Mozilla/5.0"}})())
     assert resp.media_type == "image/gif"
     assert any("$inc" in update and update["$inc"].get("open_count") == 1 for _, update in fake.messages.updates)
