@@ -52,7 +52,14 @@ UNSUB_FOOTER = "\n\n--\nNot interested? Unsubscribe here: {url}"
 
 
 def base_url() -> str:
-    return os.environ.get("PUBLIC_BASE_URL", os.environ.get("APP_URL", "")).rstrip("/")
+    """Absolute public origin used in email tracking links and pixels.
+
+    Email clients cannot reliably load relative image URLs. Use the backend public
+    URL as a production fallback so the tracking pixel is reachable even when
+    PUBLIC_BASE_URL / APP_URL have not been configured in Render.
+    """
+    configured = os.environ.get("PUBLIC_BASE_URL") or os.environ.get("APP_URL")
+    return (configured or "https://outreachforge.onrender.com").rstrip("/")
 
 
 async def sent_today(sender_id: str) -> int:
