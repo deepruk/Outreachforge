@@ -211,9 +211,7 @@ Set these on the **backend Web Service**:
 - CORS_ORIGINS — exact frontend origin, e.g. https://outreachforge-1.onrender.com (avoid * for a production credentialed setup).
 - JWT_SECRET — a strong, stable session signing secret; do not use the development fallback.
 
-Set this on the **frontend Static Site** and redeploy (Vite reads it at build time):
-
-- VITE_API_URL — backend origin only, e.g. https://outreachforge.onrender.com (no trailing slash).
+Keep frontend API calls on the same-origin `/api` route and preserve the Render Static Site rewrite `/api/*` → `https://outreachforge.onrender.com/api/*`. Do **not** set `VITE_API_URL` to the backend origin for this deployment, because that bypasses the working same-origin session flow.
 
 ### Google Cloud setup
 
