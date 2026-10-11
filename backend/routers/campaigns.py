@@ -53,8 +53,8 @@ async def create_campaign(body: CampaignCreate, user: dict = Depends(current_use
     c = {
         "id": new_id(), "user_id": user["id"], "name": body.name.strip(), "status": "draft",
         "steps": [{**s, "id": new_id()} for s in DEFAULT_STEPS],
-        "sender_ids": [s["id"] for s in senders], "daily_limit": 100, "track_opens": False,
-        "track_clicks": False, "stop_on_reply": True, "include_unsubscribe": True, "custom_fields": [],
+        "sender_ids": [s["id"] for s in senders], "daily_limit": 100, "track_opens": True,
+        "track_clicks": True, "stop_on_reply": True, "include_unsubscribe": True, "custom_fields": [],
         "send_days": [0, 1, 2, 3, 4], "timezone": "UTC", "use_lead_timezone": False,
         "gap_min_minutes": 10, "gap_max_minutes": 15, "random_start_minutes": 30, "send_start_hour": 0, "send_end_hour": 24,
         "created_at": now(), "launched_at": None,
@@ -192,8 +192,8 @@ async def list_leads(cid: str, q: str = "", status: Optional[str] = None, user: 
         flt["$or"] = [{f: {"$regex": q, "$options": "i"}} for f in ("email", "first_name", "last_name", "company")]
     docs = await db.leads.find(flt, {"_id": 0}).sort("created_at", -1).to_list(5000)
     ids = [d["id"] for d in docs]
-    opened = set(await db.messages.distinct("lead_id", {"lead_id": {"$in": ids}, "opened_at": {"$ne": None}}))
-    clicked = set(await db.messages.distinct("lead_id", {"lead_id": {"$in": ids}, "clicked_at": {"$ne": None}}))
+    opened = set(await db.messages.distinct("lead_id", {"lead_id": {"$in": ids}, "$or": [{"opened_at": {"$ne": None}}, {"open_count": {"$gt": 0}}]}))
+    clicked = set(await db.messages.distinct("lead_id", {"lead_id": {"$in": ids}, "$or": [{"clicked_at": {"$ne": None}}, {"click_count": {"$gt": 0}}]}))
     return [LeadOut(**{k: v for k, v in d.items() if k in LeadOut.model_fields},
                     opened=d["id"] in opened, clicked=d["id"] in clicked) for d in docs]
 

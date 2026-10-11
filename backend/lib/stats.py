@@ -4,15 +4,15 @@ from datetime import timedelta
 from lib.db import db
 from lib.util import now, pct
 
-PROJ = {"_id": 0, "campaign_id": 1, "step_index": 1, "sent_at": 1, "opened_at": 1,
+PROJ = {"_id": 0, "campaign_id": 1, "step_index": 1, "sent_at": 1, "opened_at": 1, "open_count": 1, "click_count": 1,
         "clicked_at": 1, "replied_at": 1, "bounced": 1, "lead_id": 1, "unsubscribed": 1, "variant": 1}
 
 
 def totals_from(msgs: list[dict], leads: int) -> dict:
     sent = len(msgs)
     lead_ids = {m["lead_id"] for m in msgs}
-    opened = len({m["lead_id"] for m in msgs if m.get("opened_at")})
-    clicked = len({m["lead_id"] for m in msgs if m.get("clicked_at")})
+    opened = len({m["lead_id"] for m in msgs if m.get("opened_at") or (m.get("open_count") or 0) > 0})
+    clicked = len({m["lead_id"] for m in msgs if m.get("clicked_at") or (m.get("click_count") or 0) > 0})
     replied = len({m["lead_id"] for m in msgs if m.get("replied_at")})
     bounced = len({m["lead_id"] for m in msgs if m.get("bounced")})
     unsubscribed = len({m["lead_id"] for m in msgs if m.get("unsubscribed")})
@@ -67,8 +67,8 @@ def build_steps(msgs: list[dict], steps: list[dict]) -> list[dict]:
         ms = [m for m in msgs if m.get("step_index") == i]
         out.append({
             "step": i + 1, "subject": st.get("subject") or f"Follow-up {i}",
-            "sent": len(ms), "opened": sum(1 for m in ms if m.get("opened_at")),
-            "clicked": sum(1 for m in ms if m.get("clicked_at")),
+            "sent": len(ms), "opened": sum(1 for m in ms if m.get("opened_at") or (m.get("open_count") or 0) > 0),
+            "clicked": sum(1 for m in ms if m.get("clicked_at") or (m.get("click_count") or 0) > 0),
             "replied": sum(1 for m in ms if m.get("replied_at")),
             "ab_winner": st.get("ab_winner"),
             "variants": variant_stats(ms, st) if (st.get("subject_b") or "").strip() else [],
@@ -80,6 +80,6 @@ def variant_stats(ms: list[dict], st: dict) -> list[dict]:
     out = []
     for v, subj in (("a", st.get("subject") or ""), ("b", st.get("subject_b") or "")):
         vm = [m for m in ms if (m.get("variant") or "a") == v]
-        opened = sum(1 for m in vm if m.get("opened_at"))
+        opened = sum(1 for m in vm if m.get("opened_at") or (m.get("open_count") or 0) > 0)
         out.append({"variant": v, "subject": subj, "sent": len(vm), "opened": opened, "open_rate": pct(opened, len(vm))})
     return out

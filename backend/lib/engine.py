@@ -232,7 +232,8 @@ async def process_campaign(c: dict) -> None:
             "id": mid, "user_id": c["user_id"], "campaign_id": c["id"], "lead_id": lead["id"],
             "sender_id": sender["id"], "step_index": idx, "variant": variant, "to_email": lead["email"], "subject": subject,
             "body": body, "message_id_header": header_id, "sent_at": now(), "opened_at": None,
-            "open_count": 0, "clicked_at": None, "click_count": 0, "replied_at": None, "bounced": False,
+            "open_count": 0, "last_opened_at": None, "clicked_at": None, "click_count": 0,
+            "last_clicked_at": None, "replied_at": None, "bounced": False,
         })
         capacity[sender["id"]] -= 1
         sent_now += 1
@@ -241,7 +242,7 @@ async def process_campaign(c: dict) -> None:
         sender["next_available_at"] = now() + timedelta(seconds=random.uniform(lo * 60, hi * 60))
         await db.senders.update_one({"id": sender["id"]}, {"$set": {"next_available_at": sender["next_available_at"]}})
         nxt = idx + 1
-        upd: dict = {"current_step": nxt, "last_sent_at": now(), "sender_id": sender["id"]}
+        upd: dict = {"current_step": nxt, "last_sent_at": now(), "last_subject": subject, "sender_id": sender["id"]}
         if nxt >= len(steps):
             upd.update(status="completed", next_send_at=None)
         else:
@@ -297,6 +298,7 @@ async def record_reply(user_id: str, lead: dict, sender_id: str, subject: str, b
     last = await db.messages.find({"lead_id": lead["id"]}, {"_id": 0, "id": 1, "replied_at": 1}).sort("sent_at", -1).to_list(1)
     if last and not last[0].get("replied_at") and label != "out_of_office":
         await db.messages.update_one({"id": last[0]["id"]}, {"$set": {"replied_at": at}})
+        await db.campaigns.update_one({"id": lead["campaign_id"]}, {"$inc": {"replies": 1}})
     return True
 
 
@@ -307,12 +309,21 @@ async def sync_sender(sender: dict) -> int:
     for m in msgs:
         if m["from_email"] == sender["email"].lower():
             continue
-        if any(b in m["from_email"] for b in BOUNCE_FROM):
-            for addr in set(EMAIL_RE.findall(m["body"])):
-                lead = await db.leads.find_one({"user_id": uid, "email": addr.lower(), "status": {"$in": ["in_progress", "completed"]}}, {"_id": 0})
+        if any(b in m["from_email"] for b in BOUNCE_FROM) or any(
+            marker in (m.get("subject") or "").lower()
+            for marker in ("undeliverable", "delivery status notification", "delivery failure")
+        ):
+            for addr in set(EMAIL_RE.findall(m.get("body", ""))):
+                lead = await db.leads.find_one(
+                    {"user_id": uid, "email": addr.lower(), "status": {"$in": ["in_progress", "completed"]}},
+                    {"_id": 0},
+                )
                 if lead:
-                    await db.leads.update_one({"id": lead["id"]}, {"$set": {"status": "bounced", "next_send_at": None}})
+                    await db.leads.update_one(
+                        {"id": lead["id"]}, {"$set": {"status": "bounced", "next_send_at": None}}
+                    )
                     await db.messages.update_many({"lead_id": lead["id"]}, {"$set": {"bounced": True}})
+                    await db.campaigns.update_one({"id": lead["campaign_id"]}, {"$inc": {"bounces": 1}})
             continue
         lead = None
         refs = [r for r in (m["in_reply_to"] + " " + m["references"]).split() if r]
@@ -321,11 +332,36 @@ async def sync_sender(sender: dict) -> int:
             if orig:
                 lead = await db.leads.find_one({"id": orig["lead_id"]}, {"_id": 0})
         if not lead:
-            lead = await db.leads.find_one({"user_id": uid, "email": m["from_email"], "current_step": {"$gt": 0}}, {"_id": 0}, sort=[("last_sent_at", -1)])
+            # Match the exact sender address, then use recent send history as a fallback.
+            recent = await db.leads.find(
+                {"user_id": uid, "email": m["from_email"], "current_step": {"$gt": 0}},
+                {"_id": 0},
+            ).sort("last_sent_at", -1).to_list(50)
+            if len(recent) == 1:
+                lead = recent[0]
+            elif recent:
+                incoming_subject = " ".join((m.get("subject") or "").strip().split()).lower()
+                def normalise_subject(value: str) -> str:
+                    value = " ".join((value or "").strip().split()).lower()
+                    while True:
+                        updated = value
+                        for prefix in ("re:", "fw:", "fwd:"):
+                            if value.startswith(prefix):
+                                value = value[len(prefix):].strip()
+                        if value == updated:
+                            return value
+                matching = [
+                    candidate for candidate in recent
+                    if normalise_subject(candidate.get("last_subject", "")) == normalise_subject(incoming_subject)
+                    and candidate.get("last_subject")
+                ]
+                lead = matching[0] if matching else recent[0]
         if not lead:
             continue
         body = mailer.strip_quoted(m["body"])
-        if await record_reply(uid, lead, sender["id"], m["subject"] or "(no subject)", body, m["message_id"], m["from_email"], sender["email"]):
+        normalized_subject = " ".join((m.get("subject") or "").strip().split())
+        reply_subject = normalized_subject if normalized_subject.lower().startswith("re:") else f"Re: {normalized_subject or lead.get('last_subject') or 'your message'}"
+        if await record_reply(uid, lead, sender["id"], reply_subject, body, m["message_id"], m["from_email"], sender["email"]):
             count += 1
     await db.senders.update_one({"id": sender["id"]}, {"$set": {"last_uid": max_uid, "last_synced_at": now()}})
     return count

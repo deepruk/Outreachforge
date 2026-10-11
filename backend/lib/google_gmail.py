@@ -165,7 +165,7 @@ def fetch_new(sender: dict, last_cursor: int) -> tuple[list[dict], int]:
     against delayed message indexing; duplicate messages are discarded by record_reply().
     """
     # Re-scan five minutes to avoid losing messages that Gmail indexes late.
-    query = f"in:inbox after:{max(0, int(last_cursor) - 300)}" if last_cursor else "in:inbox newer_than:7d"
+    query = f"in:anywhere after:{max(0, int(last_cursor) - 300)} -from:me" if last_cursor else "in:anywhere newer_than:60d -from:me"
     token = access_token(sender)
     out: list[dict] = []
     page_token: str | None = None
