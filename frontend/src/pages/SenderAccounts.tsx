@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Flame, Loader2, MoreHorizontal, Pause, Play, Plug, Plus, Server, SlidersHorizontal, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
+import { API_BASE, apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import type { ConnectionTest, Sender, SenderIn, SenderUpdate } from "@/lib/types";
 import { Switch } from "@/components/ui/switch";
 import { SENDER_STATUS, errMsg, fmt, timeAgo } from "@/lib/format";
@@ -149,6 +149,11 @@ function AddSenderDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
             <DialogDescription>{PRESETS[preset].hint}</DialogDescription>
           </DialogHeader>
           <div className="my-5 space-y-5">
+            <Button type="button" variant="outline" className="w-full justify-center gap-2 border-blue-500/40" onClick={() => { window.location.assign(`${API_BASE}/api/senders/google/oauth/start`); }} data-testid="connect-google-oauth-button">
+              <span className="grid size-5 place-items-center rounded-full bg-white text-xs font-bold text-blue-600">G</span>
+              Continue with Google
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">Secure OAuth connection. No Gmail password or App Password required.</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {Object.entries(PRESETS).map(([k, p]) => (
                 <button key={k} type="button" onClick={() => applyPreset(k)} data-testid={`sender-preset-${k}`}
@@ -214,6 +219,24 @@ export default function SenderAccounts() {
   const [editing, setEditing] = useState<Sender | null>(null);
   const senders = useQuery({ queryKey: ["senders"], queryFn: () => apiGet<Sender[]>("/senders") });
   const inv = () => qc.invalidateQueries({ queryKey: ["senders"] });
+  useEffect(() => {
+    const status = params.get("google_oauth");
+    if (!status) return;
+    if (status === "connected") {
+      toast.success("Gmail connected with Google OAuth");
+      qc.invalidateQueries({ queryKey: ["senders"] });
+    } else {
+      const reason = params.get("reason");
+      const message = reason === "consent_denied" ? "Google authorization was cancelled."
+        : reason === "state_expired" ? "Google authorization expired. Please try again."
+        : "Could not connect Gmail. Check the Google OAuth configuration and try again.";
+      toast.error(message);
+    }
+    const next = new URLSearchParams(params);
+    next.delete("google_oauth");
+    next.delete("reason");
+    setParams(next, { replace: true });
+  }, [params, setParams, qc]);
   const patch = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Partial<Pick<Sender, "status" | "daily_limit">> }) => apiPatch<Sender>(`/senders/${id}`, body),
     onSuccess: () => { inv(); toast.success("Sender updated"); },
