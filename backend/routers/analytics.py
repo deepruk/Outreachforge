@@ -1,7 +1,7 @@
 import base64
 from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from lib.auth import current_user
@@ -13,7 +13,16 @@ from models.schemas import AnalyticsOut, CampaignRow, StatTotals
 
 router = APIRouter(tags=["analytics"])
 
+# Fresh transparent 1x1 GIF used by the email open-tracking endpoint.
 PIXEL = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==")
+
+# Heuristic only: ignore clearly identified security scanners/crawlers. Mail privacy
+# proxies can still make some automated requests indistinguishable from real opens.
+AUTOMATED_OPEN_UA = (
+    "bot", "crawler", "spider", "scanner", "proofpoint", "mimecast",
+    "barracuda", "urlscan", "fireeye", "fortinet", "safelinks",
+    "email security", "security gateway",
+)
 
 
 @router.get("/analytics", response_model=AnalyticsOut)
@@ -35,7 +44,12 @@ async def analytics(days: int = Query(14, ge=1, le=365), user: dict = Depends(cu
 
 # ---------- public tracking endpoints (no auth: hit by recipients' mail clients) ----------
 @router.get("/t/o/{mid}.gif")
-async def track_open(mid: str):
+async def track_open(mid: str, request: Request):
+    user_agent = request.headers.get("user-agent", "").lower()
+    # Always serve the pixel, but do not count obvious automated scanner requests.
+    if any(marker in user_agent for marker in AUTOMATED_OPEN_UA):
+        return Response(content=PIXEL, media_type="image/gif",
+                        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
     m = await db.messages.find_one({"id": mid}, {"_id": 0, "opened_at": 1})
     if m is not None:
         upd: dict = {"$inc": {"open_count": 1}}
