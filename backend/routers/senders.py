@@ -100,8 +100,6 @@ async def google_oauth_callback(request: Request):
         if token_response.status_code != 200 or not token_data.get("access_token"):
             raise RuntimeError("Google token exchange failed")
         refresh_token = token_data.get("refresh_token")
-        if not refresh_token:
-            raise RuntimeError("Google did not return a refresh token; reconnect and grant consent")
         profile_response = requests.get(
             "https://openidconnect.googleapis.com/v1/userinfo",
             headers={"Authorization": f"Bearer {token_data['access_token']}"},
@@ -111,9 +109,14 @@ async def google_oauth_callback(request: Request):
         email = str(profile.get("email", "")).strip().lower()
         if profile_response.status_code != 200 or not email or not profile.get("email_verified", False):
             raise RuntimeError("Google did not return a verified email address")
-        encrypted_refresh = encrypt_refresh_token(refresh_token)
         user_id = state_doc["user_id"]
         existing = await db.senders.find_one({"user_id": user_id, "email": email}, {"_id": 0})
+        encrypted_refresh = (
+            encrypt_refresh_token(refresh_token) if refresh_token else
+            (existing.get("google_refresh_token_enc") if existing and existing.get("auth_type") == "google_oauth" else None)
+        )
+        if not encrypted_refresh:
+            raise RuntimeError("Google did not return a refresh token; reconnect and grant consent")
         fields = {
             "auth_type": "google_oauth",
             "google_refresh_token_enc": encrypted_refresh,
@@ -128,6 +131,8 @@ async def google_oauth_callback(request: Request):
             "imap_pass": "",
             "status": "active",
             "last_error": "",
+            "last_uid": existing.get("last_uid", 0) if existing and existing.get("auth_type") == "google_oauth" else 0,
+            "last_synced_at": existing.get("last_synced_at") if existing and existing.get("auth_type") == "google_oauth" else None,
         }
         if existing:
             await db.senders.update_one({"id": existing["id"], "user_id": user_id}, {"$set": fields})
