@@ -232,7 +232,8 @@ async def process_campaign(c: dict) -> None:
             "id": mid, "user_id": c["user_id"], "campaign_id": c["id"], "lead_id": lead["id"],
             "sender_id": sender["id"], "step_index": idx, "variant": variant, "to_email": lead["email"], "subject": subject,
             "body": body, "message_id_header": header_id, "sent_at": now(), "opened_at": None,
-            "open_count": 0, "clicked_at": None, "click_count": 0, "replied_at": None, "bounced": False,
+            "open_count": 0, "last_opened_at": None, "clicked_at": None, "click_count": 0,
+            "last_clicked_at": None, "replied_at": None, "bounced": False,
         })
         capacity[sender["id"]] -= 1
         sent_now += 1
