@@ -53,8 +53,8 @@ async def create_campaign(body: CampaignCreate, user: dict = Depends(current_use
     c = {
         "id": new_id(), "user_id": user["id"], "name": body.name.strip(), "status": "draft",
         "steps": [{**s, "id": new_id()} for s in DEFAULT_STEPS],
-        "sender_ids": [s["id"] for s in senders], "daily_limit": 100, "track_opens": True,
-        "track_clicks": True, "stop_on_reply": True, "include_unsubscribe": True, "custom_fields": [],
+        "sender_ids": [s["id"] for s in senders], "daily_limit": 100, "track_opens": False,
+        "track_clicks": False, "stop_on_reply": True, "include_unsubscribe": True, "custom_fields": [],
         "send_days": [0, 1, 2, 3, 4], "timezone": "UTC", "use_lead_timezone": False,
         "gap_min_minutes": 10, "gap_max_minutes": 15, "random_start_minutes": 30, "send_start_hour": 0, "send_end_hour": 24,
         "created_at": now(), "launched_at": None,
