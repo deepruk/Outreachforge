@@ -68,7 +68,7 @@ def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_c
         return f'<a href="{html.escape(href, quote=True)}">{html.escape(url)}</a>'
 
     escaped = URL_RE.sub(link, escaped)
-    out = "<div style=\"font-family:Arial,sans-serif;font-size:14px;line-height:1.5\">" + escaped.replace("\\n", "<br>\\n") + "</div>"
+    out = "<div style=\"font-family:Arial,sans-serif;font-size:14px;line-height:1.5\">" + escaped.replace("\n", "<br>\\n") + "</div>"
     if track_opens:
         pixel_url = f"{base_url}/api/t/o/{msg_id}.gif"
         out += f'<img src="{html.escape(pixel_url, quote=True)}" width="1" height="1" alt="" style="display:none">'
