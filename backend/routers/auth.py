@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pymongo.errors import DuplicateKeyError
 
 from lib.auth import clear_session, current_user, hash_password, set_session, verify_password
 from lib.db import db
 from lib.util import new_id, now
-from models.schemas import LoginIn, SignupIn, UserOut, WorkspaceUpdate
+from models.schemas import AccountProfileUpdate, LoginIn, PasswordUpdate, SignupIn, UserOut, WorkspaceUpdate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -59,3 +60,34 @@ async def update_workspace(body: WorkspaceUpdate, user: dict = Depends(current_u
         await db.senders.update_many({"user_id": user["id"]}, {"$set": {"signatures": sigs}})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0}) or user
     return _out(fresh)
+
+
+@router.patch("/account", response_model=UserOut)
+async def update_account(body: AccountProfileUpdate, user: dict = Depends(current_user)):
+    """Update account name/email after verifying the current password."""
+    if not verify_password(body.current_password, user.get("password_hash", "")):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    email = str(body.email).lower()
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Name cannot be empty")
+    existing = await db.users.find_one({"email": email, "id": {"$ne": user["id"]}}, {"_id": 0, "id": 1})
+    if existing:
+        raise HTTPException(status_code=409, detail="That email address is already in use")
+    try:
+        await db.users.update_one({"id": user["id"]}, {"$set": {"name": name, "email": email}})
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="That email address is already in use")
+    fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0}) or user
+    return _out(fresh)
+
+
+@router.post("/password")
+async def update_password(body: PasswordUpdate, user: dict = Depends(current_user)):
+    """Change password only after confirming the existing password."""
+    if not verify_password(body.current_password, user.get("password_hash", "")):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if body.current_password == body.new_password:
+        raise HTTPException(status_code=400, detail="Choose a password different from your current password")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"password_hash": hash_password(body.new_password)}})
+    return {"ok": True}
