@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, BarChart3, Check, Plus, Eye, Inbox, MessageSquareReply, MousePointerClick, Send, ShieldAlert, X } from "lucide-react";
+import { ArrowUpRight, BarChart3, Check, Plus, Eye, Inbox, MessageSquareReply, MousePointerClick, Send, ShieldAlert } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import type { Analytics, Campaign, Sender, Thread, User } from "@/lib/types";
 import { buttonVariants } from "@/components/ui/button";
@@ -11,7 +11,6 @@ import { Panel, PerformanceChart, Pill, RateBar, SeriesToggles, StatCard, type S
 
 export default function Dashboard() {
   const [visible, setVisible] = useState<SeriesKey[]>(["sent", "opened", "replied"]);
-  const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem("outreachforge_onboarding_dismissed") !== "1");
   const a = useQuery({ queryKey: ["analytics", 14], queryFn: () => apiGet<Analytics>("/analytics?days=14") });
   const threads = useQuery({ queryKey: ["threads", "recent"], queryFn: () => apiGet<Thread[]>("/inbox/threads?limit=6") });
   const camps = useQuery({ queryKey: ["campaigns"], queryFn: () => apiGet<Campaign[]>("/campaigns") });
@@ -39,14 +38,14 @@ export default function Dashboard() {
           <Link to="/campaigns?new=1" className={buttonVariants({ size: "sm" })} data-testid="dashboard-new-campaign"><Plus className="size-4" />New campaign</Link>
         </>}
       />
-      {showOnboarding && steps.some((x) => !x.done) && (
+      {steps.some((x) => !x.done) && (
         <div className="mb-6 rounded-xl border border-border bg-panel p-5 animate-fade-up" data-testid="onboarding-checklist">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-semibold text-foreground">Get your workspace sending</p>
               <p className="text-sm text-muted-foreground">{steps.filter((x) => x.done).length} of {steps.length} steps complete</p>
             </div>
-            <div className="flex items-center gap-3"><div className="h-1.5 w-40 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${(steps.filter((x) => x.done).length / steps.length) * 100}%` }} /></div><button type="button" onClick={() => { localStorage.setItem("outreachforge_onboarding_dismissed", "1"); setShowOnboarding(false); }} aria-label="Dismiss setup checklist" title="Dismiss checklist" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground" data-testid="dismiss-onboarding-checklist"><X className="size-4" /></button></div>
+            <div className="h-1.5 w-40 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${(steps.filter((x) => x.done).length / steps.length) * 100}%` }} /></div>
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {steps.map((st, i) => (
