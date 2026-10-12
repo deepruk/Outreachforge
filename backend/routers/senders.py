@@ -184,8 +184,77 @@ async def _get(user: dict, sid: str) -> dict:
 
 @router.get("", response_model=list[SenderOut])
 async def list_senders(user: dict = Depends(current_user)):
-    docs = await db.senders.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
-    return [await _out(s) for s in docs]
+    """Return sender accounts with batched stats to avoid N+1 MongoDB round trips."""
+    docs = await db.senders.find(
+        {"user_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    if not docs:
+        return []
+
+    sender_ids = [s["id"] for s in docs]
+    current = now()
+    today = start_of_today()
+    since = current - timedelta(days=14)
+
+    # One aggregation for all message metrics instead of several queries per sender.
+    message_rows = await db.messages.aggregate([
+        {"$match": {"sender_id": {"$in": sender_ids}}},
+        {"$group": {
+            "_id": "$sender_id",
+            "sent_total": {"$sum": 1},
+            "sent_today": {"$sum": {"$cond": [{"$gte": ["$sent_at", today]}, 1, 0]}},
+            "sent_14d": {"$sum": {"$cond": [{"$gte": ["$sent_at", since]}, 1, 0]}},
+            "bounced_14d": {"$sum": {"$cond": [{"$and": [
+                {"$gte": ["$sent_at", since]}, {"$eq": ["$bounced", True]}
+            ]}, 1, 0]}},
+            "replied_14d": {"$sum": {"$cond": [{"$and": [
+                {"$gte": ["$sent_at", since]},
+                {"$ne": [{"$ifNull": ["$replied_at", None]}, None]}
+            ]}, 1, 0]}},
+        }},
+    ]).to_list(length=None)
+    thread_rows = await db.threads.aggregate([
+        {"$match": {"sender_id": {"$in": sender_ids}}},
+        {"$group": {"_id": "$sender_id", "reply_count": {"$sum": 1}}},
+    ]).to_list(length=None)
+
+    message_stats = {row["_id"]: row for row in message_rows}
+    thread_stats = {row["_id"]: row["reply_count"] for row in thread_rows}
+    result = []
+    for sender in docs:
+        stats = message_stats.get(sender["id"], {})
+        sent_14d = int(stats.get("sent_14d", 0))
+        bounced = int(stats.get("bounced_14d", 0))
+        replied = int(stats.get("replied_14d", 0))
+        if sent_14d:
+            bounce_rate = round(bounced * 100.0 / sent_14d, 1)
+            reply_rate = round(replied * 100.0 / sent_14d, 1)
+            health = round(100 - (bounced / sent_14d) * 400 + (replied / sent_14d) * 30)
+            if sender.get("status") == "error":
+                health -= 10
+            health = max(0, min(100, health))
+        else:
+            bounce_rate = reply_rate = 0.0
+            health = 100
+        payload = {
+            k: v for k, v in sender.items()
+            if k in SenderOut.model_fields and k not in {
+                "effective_limit", "sent_today", "sent_total", "reply_count",
+                "sending_health", "bounce_rate_14d", "reply_rate_14d", "sent_14d"
+            }
+        }
+        result.append(SenderOut(
+            **payload,
+            effective_limit=int(sender.get("daily_limit") or 0),
+            sent_today=int(stats.get("sent_today", 0)),
+            sent_total=int(stats.get("sent_total", 0)),
+            reply_count=int(thread_stats.get(sender["id"], 0)),
+            sending_health=health,
+            bounce_rate_14d=bounce_rate,
+            reply_rate_14d=reply_rate,
+            sent_14d=sent_14d,
+        ))
+    return result
 
 
 @router.post("/test", response_model=ConnectionTestOut)
