@@ -27,9 +27,30 @@ function LiveBar({ campaign }: { campaign: Campaign }) {
   let next = "N/A";
   let nextSub = d?.next_note ?? "";
   if (d?.next_email_at) {
-    const secs = Math.round((new Date(d.next_email_at).getTime() - nowMs) / 1000);
-    next = secs <= 30 ? "Any moment" : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, "0")}s`;
-    if (!nextSub) nextSub = new Date(d.next_email_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    const secs = Math.max(0, Math.round((new Date(d.next_email_at).getTime() - nowMs) / 1000));
+    const minutes = Math.ceil(secs / 60);
+    if (secs <= 30) {
+      next = "Any moment";
+    } else if (minutes < 60) {
+      next = `${minutes}m`;
+    } else if (minutes < 24 * 60) {
+      const hours = Math.floor(minutes / 60);
+      const remainder = minutes % 60;
+      next = remainder ? `${hours}h ${remainder}m` : `${hours}h`;
+    } else {
+      const days = Math.floor(minutes / (24 * 60));
+      const hours = Math.floor((minutes % (24 * 60)) / 60);
+      next = hours ? `${days}d ${hours}h` : `${days}d`;
+    }
+    if (!nextSub) {
+      try {
+        nextSub = `Next window: ${new Date(d.next_email_at).toLocaleTimeString(undefined, {
+          hour: "numeric", minute: "2-digit", timeZone: campaign.timezone || undefined,
+        })}${campaign.timezone ? ` · ${campaign.timezone}` : ""}`;
+      } catch {
+        nextSub = new Date(d.next_email_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+      }
+    }
   }
   const pct = d?.capacity_used_pct ?? 0;
   const items = [
