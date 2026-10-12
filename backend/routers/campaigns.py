@@ -9,7 +9,7 @@ from lib.auth import current_user
 from lib.db import db
 from lib.engine import decide_winner, in_send_window, zone
 from lib.util import start_of_today
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from lib.stats import PROJ, build_series, build_steps, campaign_totals, totals_from
 from lib.util import new_id, now
 from models.schemas import (
@@ -240,9 +240,31 @@ async def campaign_live(cid: str, user: dict = Depends(current_user)):
         if not free:
             out.next_note = "All inboxes hit today's limit"
         else:
-            out.next_email_at = max(lead_at, min(free), n)
-            if due and not in_send_window(c, due) and out.next_email_at <= n + timedelta(minutes=1):
+            earliest = max(lead_at, min(free), n)
+            if due and not in_send_window(c, due):
+                # Report the next allowed sending-window start instead of "now",
+                # which made the UI display "Any moment" while sends were blocked.
+                tz = zone(
+                    due.get("timezone") if c.get("use_lead_timezone") else c.get("timezone")
+                ) or zone("UTC")
+                local_now = n.astimezone(tz)
+                allowed_days = c.get("send_days")
+                allowed_days = set(range(7)) if allowed_days is None else set(allowed_days)
+                start_hour = max(0, min(23, int(c.get("send_start_hour", 0))))
+                window_start = None
+                for offset in range(0, 8):
+                    day = local_now.date() + timedelta(days=offset)
+                    if day.weekday() not in allowed_days:
+                        continue
+                    candidate = datetime.combine(day, time(start_hour, 0), tzinfo=tz)
+                    if candidate <= local_now:
+                        continue
+                    window_start = candidate
+                    break
+                if window_start is not None:
+                    earliest = max(earliest, window_start)
                 out.next_note = "Waiting for the sending window"
+            out.next_email_at = earliest
     return out
 
 
