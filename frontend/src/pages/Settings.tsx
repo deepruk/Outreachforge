@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck, KeyRound, Loader2, Mail, ShieldCheck, UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -41,6 +41,9 @@ export default function Settings() {
   });
 
   const user = me.data;
+  useEffect(() => {
+    if (user) { setName(user.name); setEmail(user.email); }
+  }, [user?.id]);
   const submitProfile = (e: FormEvent) => {
     e.preventDefault();
     if (!profilePassword) return toast.error("Enter your current password to confirm these changes");
@@ -70,11 +73,11 @@ export default function Settings() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="settings-name">Full name</Label>
-                <Input id="settings-name" value={name || user?.name || ""} onChange={(e) => setName(e.target.value)} required maxLength={80} autoComplete="name" data-testid="settings-name-input" />
+                <Input id="settings-name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} autoComplete="name" data-testid="settings-name-input" />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="settings-email">Account email</Label>
-                <Input id="settings-email" type="email" value={email || user?.email || ""} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" data-testid="settings-email-input" />
+                <Input id="settings-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" data-testid="settings-email-input" />
               </div>
             </div>
             <div className="space-y-1.5">
