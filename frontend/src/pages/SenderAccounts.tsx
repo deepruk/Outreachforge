@@ -313,7 +313,7 @@ export default function SenderAccounts() {
   const setOpen = (v: boolean) => { setOpenRaw(v); if (!v && params.get("connect")) setParams({}); };
   const [testRes, setTestRes] = useState<{ id: string; r: ConnectionTest } | null>(null);
   const [editing, setEditing] = useState<Sender | null>(null);
-  const senders = useQuery({ queryKey: ["senders"], queryFn: () => apiGet<Sender[]>("/senders") });
+  const senders = useQuery({ queryKey: ["senders"], queryFn: () => apiGet<Sender[]>("/senders"), staleTime: 10_000, refetchOnWindowFocus: false });
   const inv = () => qc.invalidateQueries({ queryKey: ["senders"] });
   useEffect(() => {
     const status = params.get("google_oauth");
