@@ -1,8 +1,10 @@
+import asyncio
 import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from lib import mailer
 from lib.auth import current_user
 from lib.db import db
 from lib.engine import decide_winner, in_send_window, zone
@@ -11,7 +13,7 @@ from datetime import timedelta
 from lib.stats import PROJ, build_series, build_steps, campaign_totals, totals_from
 from lib.util import new_id, now
 from models.schemas import (
-    AnalyticsOut, CampaignCreate, CampaignLive, CampaignOut, CampaignUpdate, LeadImport, LeadImportResult,
+    AnalyticsOut, CampaignCreate, CampaignLive, CampaignOut, CampaignTestEmailIn, CampaignUpdate, LeadImport, LeadImportResult,
     LeadOut, StatTotals,
 )
 
@@ -98,6 +100,68 @@ async def update_campaign(cid: str, body: CampaignUpdate, user: dict = Depends(c
     if upd:
         await db.campaigns.update_one({"id": cid}, {"$set": upd})
     return await get_campaign(cid, user)
+
+
+@router.post("/{cid}/test-email")
+async def send_campaign_test_email(cid: str, body: CampaignTestEmailIn, user: dict = Depends(current_user)):
+    """Send one test copy of the currently edited step without creating campaign activity or starting a campaign."""
+    campaign = await _get(user, cid)
+    if body.sender_id not in (campaign.get("sender_ids") or []):
+        raise HTTPException(status_code=400, detail="Choose a sender assigned to this campaign")
+    sender = await db.senders.find_one(
+        {"id": body.sender_id, "user_id": user["id"]}, {"_id": 0}
+    )
+    if not sender:
+        raise HTTPException(status_code=404, detail="Sender account not found")
+    if sender.get("status") != "active":
+        raise HTTPException(status_code=400, detail="Choose an active, real sender account to send a test email")
+
+    custom = {key: f"[{key}]" for key in (body.custom_fields or campaign.get("custom_fields") or [])}
+    lead = {
+        "email": str(body.to_email),
+        "first_name": "Olivia",
+        "last_name": "Carter",
+        "company": "Northwind",
+        "title": "VP Sales",
+        "custom": custom,
+    }
+    subject = mailer.spin(mailer.render_vars(body.subject, lead))
+    if not subject.strip() and body.step_index > 0:
+        first_subject = mailer.spin(mailer.render_vars(body.first_subject or "", lead))
+        subject = "Re: " + (first_subject or "Quick question")
+    if not subject.strip():
+        raise HTTPException(status_code=400, detail="Add a subject before sending a test email")
+
+    # Deliberately disable tracking and avoid writing a messages/leads record for test sends.
+    test_unsubscribe = "[unsubscribe link is added to live campaign emails]"
+    rendered_body = mailer.spin(mailer.render_vars(
+        body.body, lead, {"unsubscribe_link": test_unsubscribe}
+    ))
+    workspace = await db.users.find_one({"id": user["id"]}, {"_id": 0, "default_signature": 1}) or {}
+    signatures = [s.strip() for s in (sender.get("signatures") or []) if (s or "").strip()]
+    if not signatures and (workspace.get("default_signature") or "").strip():
+        signatures = [workspace["default_signature"].strip()]
+    if signatures and signatures[0] not in rendered_body:
+        rendered_body = rendered_body.rstrip() + "\n\n" + signatures[0] + "\n"
+    if body.include_unsubscribe and "unsubscribe_link" not in body.body:
+        rendered_body += "\n\n--\nTest email: the live campaign unsubscribe footer is omitted in test mode."
+    if not rendered_body.strip():
+        raise HTTPException(status_code=400, detail="Add an email body before sending a test email")
+
+    html_body = mailer.build_html(
+        rendered_body, f"test-{new_id()}", "", False, False, preheader=body.preheader
+    )
+    try:
+        await asyncio.to_thread(
+            mailer.send_email, sender, str(body.to_email), subject, html_body, rendered_body,
+            plain_only=body.plain_text_only,
+        )
+    except Exception as exc:
+        log_message = f"Campaign test email failed for sender {sender.get('email', '')}: {type(exc).__name__}"
+        import logging
+        logging.getLogger(__name__).warning(log_message)
+        raise HTTPException(status_code=502, detail="Test email could not be sent. Check the sender account connection and try again.") from exc
+    return {"ok": True, "to_email": str(body.to_email), "sender_email": sender.get("email", ""), "subject": subject}
 
 
 @router.post("/{cid}/launch", response_model=CampaignOut)

@@ -145,6 +145,19 @@ class CampaignUpdate(BaseModel):
     followup_priority: Optional[int] = Field(default=None, ge=0, le=100)
 
 
+class CampaignTestEmailIn(BaseModel):
+    to_email: EmailStr
+    sender_id: str = Field(min_length=1, max_length=200)
+    subject: str = Field(default="", max_length=998)
+    first_subject: str = Field(default="", max_length=998)
+    body: str = Field(default="", max_length=50000)
+    preheader: str = Field(default="", max_length=140)
+    step_index: int = Field(default=0, ge=0, le=50)
+    include_unsubscribe: bool = True
+    plain_text_only: bool = False
+    custom_fields: list[str] = Field(default_factory=list, max_length=100)
+
+
 class StatTotals(BaseModel):
     leads: int = 0
     contacted: int = 0

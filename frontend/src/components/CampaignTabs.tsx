@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Clock, Download, Eye, FileUp, Globe, History, Loader2, MessageSquareReply, MousePointerClick, Plus, Save, Search, ShieldCheck, Shuffle, Sparkles, Timer, Trash2, Upload, UserPlus, Wand2 } from "lucide-react";
+import { CalendarDays, Clock, Download, Eye, FileUp, Globe, History, Loader2, MessageSquareReply, MousePointerClick, Plus, Save, Send, Search, ShieldCheck, Shuffle, Sparkles, Timer, Trash2, Upload, UserPlus, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 import type { Campaign, Lead, LeadHistory, LeadImportResult, LeadIn, RewriteGoal, RewriteLength, RewriteRequest, RewriteResponse, RewriteTone, Sender, Step } from "@/lib/types";
@@ -679,6 +679,36 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
   };
   const firstSubject = steps[0]?.subject ?? "";
   const [rewriteOpen, setRewriteOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testTo, setTestTo] = useState("");
+  const [testSenderId, setTestSenderId] = useState(campaign.sender_ids[0] ?? "");
+  const testSenders = useQuery({
+    queryKey: ["senders"],
+    queryFn: () => apiGet<Sender[]>("/senders"),
+    enabled: testOpen,
+  });
+  const sendTest = useMutation({
+    mutationFn: () => apiPost<{ ok: boolean; to_email: string; sender_email: string; subject: string }>(
+      `/campaigns/${campaign.id}/test-email`,
+      {
+        to_email: testTo.trim(),
+        sender_id: testSenderId,
+        subject: previewB && cur?.subject_b.trim() ? cur.subject_b : (cur?.subject ?? ""),
+        first_subject: firstSubject,
+        body: cur?.body ?? "",
+        preheader: cur?.preheader ?? "",
+        step_index: active,
+        include_unsubscribe: campaign.include_unsubscribe,
+        plain_text_only: campaign.plain_text_only,
+        custom_fields: campaign.custom_fields,
+      },
+    ),
+    onSuccess: (result) => {
+      toast.success(`Test email sent to ${result.to_email}`);
+      setTestOpen(false);
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
   const campaignScore = useMemo(
     () => scoreCampaign({ steps, include_unsubscribe: campaign.include_unsubscribe }),
     [steps, campaign.include_unsubscribe],
@@ -750,7 +780,16 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setRewriteOpen(true)}
+                  onClick={() => setTestOpen(true)}
+                  className="border-emerald-500/40 text-emerald-300 hover:border-emerald-500/70 hover:text-emerald-200"
+                  data-testid="sequence-test-email-button"
+                >
+                  <Send className="size-4" /> Send test
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setRewriteOpen(true)
                   className="border-cyan-500/40 text-cyan hover:border-cyan-500/70 hover:text-cyan"
                   data-testid="sequence-rewrite-button"
                 >
@@ -890,6 +929,64 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
       </div>
       </div>
       <RewriteDialog open={rewriteOpen} onClose={() => setRewriteOpen(false)} step={cur} onApply={applyRewrite} />
+      <Dialog open={testOpen} onOpenChange={setTestOpen}>
+        <DialogContent className="sm:max-w-md" data-testid="campaign-test-email-dialog">
+          <form onSubmit={(e) => { e.preventDefault(); sendTest.mutate(); }}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Send className="size-4 text-emerald-300" /> Send a test email</DialogTitle>
+              <DialogDescription>
+                Send the current Step {active + 1} draft to your inbox. This uses the selected sender but does not launch the campaign or email any leads. Tracking is disabled for test messages.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="my-5 space-y-4">
+              <div className="space-y-1.5">
+                <Label>Send test to</Label>
+                <Input
+                  type="email"
+                  required
+                  value={testTo}
+                  onChange={(e) => setTestTo(e.target.value)}
+                  placeholder="you@yourcompany.com"
+                  data-testid="campaign-test-recipient"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Send from</Label>
+                <Select value={testSenderId} onValueChange={setTestSenderId} required>
+                  <SelectTrigger data-testid="campaign-test-sender">
+                    <SelectValue placeholder="Choose a sender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(testSenders.data ?? [])
+                      .filter((sender) => campaign.sender_ids.includes(sender.id) && sender.status === "active")
+                      .map((sender) => (
+                        <SelectItem key={sender.id} value={sender.id}>{sender.from_name ? `${sender.from_name} <${sender.email}>` : sender.email}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {testSenders.isLoading && <p className="text-xs text-muted-foreground">Loading sender accounts…</p>}
+                {!testSenders.isLoading && !(testSenders.data ?? []).some((sender) => campaign.sender_ids.includes(sender.id) && sender.status === "active") && (
+                  <p className="text-xs text-amber-300">Add an active sender account to this campaign before testing.</p>
+                )}
+              </div>
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                Test uses sample personalization values (Olivia, Carter, Northwind). The live campaign's unsubscribe footer and tracking are intentionally not recorded in test mode.
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setTestOpen(false)}>Cancel</Button>
+              <Button
+                type="submit"
+                disabled={sendTest.isPending || !testTo.trim() || !testSenderId || !(testSenders.data ?? []).some((sender) => sender.id === testSenderId && sender.status === "active")}
+                data-testid="campaign-test-send-button"
+              >
+                {sendTest.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                {sendTest.isPending ? "Sending…" : "Send test email"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
