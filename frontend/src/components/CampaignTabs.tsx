@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Clock, Timer, FileUp, Globe, Loader2, Plus, Save, Search, Shuffle, Trash2, Upload, UserPlus } from "lucide-react";
+import { CalendarDays, Clock, Download, Eye, FileUp, Globe, History, Loader2, MessageSquareReply, MousePointerClick, Plus, Save, Search, ShieldCheck, Shuffle, Sparkles, Timer, Trash2, Upload, UserPlus, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
-import type { Campaign, Lead, LeadImportResult, LeadIn, Sender, Step } from "@/lib/types";
+import type { Campaign, Lead, LeadHistory, LeadImportResult, LeadIn, RewriteGoal, RewriteLength, RewriteRequest, RewriteResponse, RewriteTone, Sender, Step } from "@/lib/types";
 import { LEAD_STATUS, errMsg, timeAgo } from "@/lib/format";
 import { Panel, Pill } from "@/components/ui-kit";
+import { scoreCampaign, scoreBand, type SpamItem, type StepScore } from "@/lib/spam";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -97,6 +98,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
   const [drag, setDrag] = useState(false);
   const [manual, setManual] = useState(false);
   const [one, setOne] = useState<LeadIn>({ email: "", first_name: "", last_name: "", company: "", title: "", timezone: "", custom: {} });
+  const [historyLead, setHistoryLead] = useState<Lead | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const leads = useQuery({
     queryKey: ["leads", campaign.id, q, status],
@@ -176,13 +178,23 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
             </div>
             <Select value={status} onValueChange={(v: string) => setStatus(v)}>
               <SelectTrigger size="sm" className="w-36" data-testid="lead-status-filter">
-                <SelectValue>{(v) => (v === "all" ? "All statuses" : LEAD_STATUS[v as keyof typeof LEAD_STATUS]?.label)}</SelectValue>
+                <SelectValue>{(v) => {
+                  if (v === "all") return "All statuses";
+                  if (v === "opened") return "Opened";
+                  if (v === "clicked") return "Clicked";
+                  return LEAD_STATUS[v as keyof typeof LEAD_STATUS]?.label;
+                }}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
                 {Object.entries(LEAD_STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                <SelectItem value="opened" data-testid="lead-status-opened">Opened</SelectItem>
+                <SelectItem value="clicked" data-testid="lead-status-clicked">Clicked</SelectItem>
               </SelectContent>
             </Select>
+            <Button variant="outline" size="sm" onClick={() => { window.location.assign(`/api/campaigns/${campaign.id}/leads/export`); }} data-testid="leads-export-button">
+              <Download className="size-4" /> Export CSV
+            </Button>
           </div>
         }
         testId="leads-panel"
@@ -202,7 +214,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
             </thead>
             <tbody>
               {rows.map((l) => (
-                <tr key={l.id} className="border-b border-border/70 transition-colors hover:bg-foreground/[0.02]" data-testid={`lead-row-${l.id}`}>
+                <tr key={l.id} onClick={() => setHistoryLead(l)} className="cursor-pointer border-b border-border/70 transition-colors hover:bg-foreground/[0.03]" data-testid={`lead-row-${l.id}`}>
                   <td className="px-5 py-2.5">
                     <p className="font-medium text-foreground">{`${l.first_name} ${l.last_name}`.trim() || "—"}</p>
                     <p className="font-mono text-xs text-muted-foreground">{l.email}</p>
@@ -226,7 +238,10 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
                     </div>
                   </td>
                   <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{timeAgo(l.last_sent_at)}</td>
-                  <td className="px-3 py-2.5 text-right">
+                  <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="icon-xs" onClick={() => setHistoryLead(l)} data-testid={`lead-history-${l.id}`} aria-label="View lead history">
+                      <History className="size-3.5 text-muted-foreground" />
+                    </Button>
                     <Button variant="ghost" size="icon-xs" onClick={() => del.mutate(l.id)} data-testid={`lead-delete-${l.id}`} aria-label="Remove lead">
                       <Trash2 className="size-3.5 text-muted-foreground" />
                     </Button>
@@ -297,7 +312,81 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      <LeadHistoryDialog campaign={campaign} lead={historyLead} onClose={() => setHistoryLead(null)} />
     </div>
+  );
+}
+
+// -------- Lead history dialog -------------------------------------------
+function LeadHistoryDialog({ campaign, lead, onClose }: { campaign: Campaign; lead: Lead | null; onClose: () => void }) {
+  const h = useQuery({
+    queryKey: ["lead-history", campaign.id, lead?.id],
+    queryFn: () => apiGet<LeadHistory>(`/campaigns/${campaign.id}/leads/${lead!.id}/history`),
+    enabled: !!lead,
+  });
+  const data = h.isError ? undefined : h.data;
+  return (
+    <Dialog open={!!lead} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl scroll-thin" data-testid="lead-history-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History className="size-4 text-cyan" /> {`${lead?.first_name ?? ""} ${lead?.last_name ?? ""}`.trim() || lead?.email || "Lead history"}
+          </DialogTitle>
+          <DialogDescription className="font-mono text-xs">
+            {lead?.email}{lead?.company ? ` · ${lead.company}` : ""}
+          </DialogDescription>
+        </DialogHeader>
+        {h.isPending && <div className="flex items-center justify-center py-10"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>}
+        {data && data.messages.length === 0 && (
+          <p className="rounded-lg border border-dashed border-border bg-background px-5 py-10 text-center text-sm text-muted-foreground" data-testid="lead-history-empty">
+            No emails sent to this lead yet. Launch the campaign and the first step will land in their inbox.
+          </p>
+        )}
+        {data && data.messages.length > 0 && (
+          <ol className="relative my-3 space-y-4 pl-6" data-testid="lead-history-timeline">
+            <span className="absolute inset-y-2 left-[11px] w-px bg-border" aria-hidden />
+            {data.messages.map((m) => {
+              const sent = new Date(m.sent_at);
+              return (
+                <li key={m.id} className="relative" data-testid={`lead-history-msg-${m.id}`}>
+                  <span className="absolute -left-6 top-1 grid size-6 place-items-center rounded-full border border-border bg-panel text-[10px] font-mono text-cyan">
+                    {m.step_index + 1}
+                  </span>
+                  <div className="rounded-lg border border-border bg-background p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{m.subject || <span className="italic text-muted-foreground">Same-thread follow-up</span>}</p>
+                        <p className="truncate font-mono text-[11px] text-muted-foreground">
+                          {m.sender_from_name ? `${m.sender_from_name} <${m.sender_email}>` : m.sender_email} → {lead?.email}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{sent.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5" data-testid={`lead-history-badges-${m.id}`}>
+                      <Pill cls="border-blue-500/30 bg-blue-500/10 text-blue-300">Step {m.step_index + 1}{m.variant === "b" ? " · B" : ""}</Pill>
+                      {m.opened_at && <Pill cls="border-sky-500/30 bg-sky-500/10 text-sky-300"><Eye className="size-3" /> Opened{m.open_count > 1 ? ` · ${m.open_count}×` : ""}</Pill>}
+                      {m.clicked_at && <Pill cls="border-amber-500/30 bg-amber-500/10 text-amber-300"><MousePointerClick className="size-3" /> Clicked{m.click_count > 1 ? ` · ${m.click_count}×` : ""}</Pill>}
+                      {m.replied_at && <Pill cls="border-emerald-500/30 bg-emerald-500/10 text-emerald-300"><MessageSquareReply className="size-3" /> Replied</Pill>}
+                      {m.bounced && <Pill cls="border-red-500/30 bg-red-500/10 text-red-300">Bounced</Pill>}
+                      {m.unsubscribed && <Pill cls="border-orange-500/30 bg-orange-500/10 text-orange-300">Unsubscribed</Pill>}
+                    </div>
+                    {m.body && (
+                      <pre className="mt-3 whitespace-pre-wrap font-sans text-xs leading-relaxed text-foreground/85" data-testid={`lead-history-body-${m.id}`}>
+                        {m.body.length > 1200 ? m.body.slice(0, 1200) + "…" : m.body}
+                      </pre>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} data-testid="lead-history-close">Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -326,6 +415,223 @@ const countVariants = (t: string) => {
   return n;
 };
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+// -------- Spam / Deliverability score panel --------
+function SpamItemRow({ item, onApply }: { item: SpamItem; onApply: (i: SpamItem) => void }) {
+  const dot = item.level === "critical" ? "bg-red-400" : item.level === "warning" ? "bg-amber-400" : "bg-cyan-400";
+  return (
+    <li className="flex items-start gap-2 py-1.5" data-testid={`spam-item-${item.id}`}>
+      <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", dot)} />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-foreground">{item.title}</p>
+        <p className="text-[11px] text-muted-foreground">{item.hint}</p>
+      </div>
+      {item.fix && (
+        <button
+          type="button"
+          onClick={() => onApply(item)}
+          className="shrink-0 rounded-md border border-input bg-background px-2 py-0.5 text-[10px] font-medium text-foreground/80 hover:border-cyan-500/50 hover:text-foreground"
+          data-testid={`spam-fix-${item.id}`}
+        >
+          {item.fix.label}
+        </button>
+      )}
+    </li>
+  );
+}
+
+function SpamScorePanel({
+  score, perStep, campaignItems, activeIndex, onJumpStep, onApplyFix,
+}: {
+  score: number;
+  perStep: StepScore[];
+  campaignItems: SpamItem[];
+  activeIndex: number;
+  onJumpStep: (i: number) => void;
+  onApplyFix: (stepIndex: number, item: SpamItem) => void;
+}) {
+  const band = scoreBand(score);
+  const barColor = band.tone === "good" ? "bg-emerald-400" : band.tone === "ok" ? "bg-amber-400" : "bg-red-400";
+  const borderColor = band.tone === "good" ? "border-emerald-500/30" : band.tone === "ok" ? "border-amber-500/30" : "border-red-500/40";
+  const stepCur = perStep[activeIndex];
+  return (
+    <Panel
+      title={
+        <span className="flex items-center gap-2">
+          <ShieldCheck className={cn("size-4", band.tone === "good" ? "text-emerald-300" : band.tone === "ok" ? "text-amber-300" : "text-red-300")} />
+          Spam score
+          <span className="rounded bg-secondary px-1.5 py-px font-mono text-[11px] text-muted-foreground">{band.label}</span>
+        </span>
+      }
+      testId="spam-score-panel"
+    >
+      <div className={cn("space-y-3 border-l-2 p-5", borderColor)}>
+        <div className="flex items-center gap-4">
+          <div className="font-mono text-3xl font-bold text-foreground" data-testid="spam-score-value">{score}</div>
+          <div className="flex-1">
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className={cn("h-full transition-all", barColor)} style={{ width: `${score}%` }} />
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Live score — recomputes as you edit. Lower = more likely to land in Spam. Fix the red items first.
+            </p>
+          </div>
+          <div className="flex gap-1.5">
+            {perStep.map((s) => {
+              const b = scoreBand(s.score);
+              const tone = b.tone === "good" ? "text-emerald-300 border-emerald-500/40" : b.tone === "ok" ? "text-amber-300 border-amber-500/40" : "text-red-300 border-red-500/50";
+              return (
+                <button
+                  key={s.stepId}
+                  type="button"
+                  onClick={() => onJumpStep(s.stepIndex)}
+                  className={cn("rounded-md border px-2 py-0.5 font-mono text-[10px] transition-colors", tone, s.stepIndex === activeIndex && "bg-foreground/5")}
+                  data-testid={`spam-step-chip-${s.stepIndex}`}
+                  aria-label={`Jump to step ${s.stepIndex + 1}, score ${s.score}`}
+                >
+                  S{s.stepIndex + 1} · {s.score}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {(stepCur?.items.length || 0) + campaignItems.length > 0 && (
+          <ul className="space-y-0.5 border-t border-border pt-2" data-testid="spam-item-list">
+            {campaignItems.map((it) => <SpamItemRow key={it.id} item={it} onApply={() => { /* campaign-level has no auto-fix for now */ }} />)}
+            {(stepCur?.items ?? []).map((it) => (
+              <SpamItemRow key={it.id} item={it} onApply={(i) => onApplyFix(stepCur!.stepIndex, i)} />
+            ))}
+          </ul>
+        )}
+        {(stepCur?.items.length || 0) + campaignItems.length === 0 && (
+          <p className="text-xs text-emerald-300" data-testid="spam-no-issues">No issues on this step — looking good.</p>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+// -------- AI "Rewrite with AI" dialog --------
+function RewriteDialog({
+  open, onClose, step, onApply,
+}: {
+  open: boolean;
+  onClose: () => void;
+  step: Step | undefined;
+  onApply: (r: RewriteResponse) => void;
+}) {
+  const [tone, setTone] = useState<RewriteTone>("professional");
+  const [goal, setGoal] = useState<RewriteGoal>("cold_intro");
+  const [length, setLength] = useState<RewriteLength>("short");
+  const [product, setProduct] = useState("");
+  const [audience, setAudience] = useState("");
+  const [preview, setPreview] = useState<RewriteResponse | null>(null);
+  const rewrite = useMutation({
+    mutationFn: () => {
+      if (!step) throw new Error("No step");
+      const payload: RewriteRequest = {
+        step: { subject: step.subject, subject_b: step.subject_b, body: step.body, preheader: step.preheader },
+        tone, goal, length,
+        product: product.trim() || undefined,
+        audience: audience.trim() || undefined,
+      };
+      return apiPost<RewriteResponse>("/ai/rewrite-step", payload);
+    },
+    onSuccess: (r) => setPreview(r),
+    onError: (e) => toast.error(errMsg(e)),
+  });
+  const reset = () => { setPreview(null); setProduct(""); setAudience(""); };
+  const close = () => { reset(); onClose(); };
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) close(); }}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl scroll-thin" data-testid="rewrite-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Wand2 className="size-4 text-cyan" /> Rewrite with AI</DialogTitle>
+          <DialogDescription>Keeps every <span className="font-mono text-foreground/80">{"{{variable}}"}</span> intact. Needs <span className="font-mono text-foreground/80">OPENAI_API_KEY</span> in backend/.env.</DialogDescription>
+        </DialogHeader>
+        {!preview && (
+          <div className="my-4 space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label>Tone</Label>
+                <Select value={tone} onValueChange={(v) => setTone(v as RewriteTone)}>
+                  <SelectTrigger data-testid="rewrite-tone-trigger"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(["professional", "casual", "friendly", "direct"] as const).map((t) => (
+                      <SelectItem key={t} value={t} data-testid={`rewrite-tone-${t}`}>{t[0].toUpperCase() + t.slice(1)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Goal</Label>
+                <Select value={goal} onValueChange={(v) => setGoal(v as RewriteGoal)}>
+                  <SelectTrigger data-testid="rewrite-goal-trigger"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cold_intro" data-testid="rewrite-goal-cold_intro">Cold intro</SelectItem>
+                    <SelectItem value="followup" data-testid="rewrite-goal-followup">Follow-up</SelectItem>
+                    <SelectItem value="breakup" data-testid="rewrite-goal-breakup">Break-up</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Length</Label>
+                <Select value={length} onValueChange={(v) => setLength(v as RewriteLength)}>
+                  <SelectTrigger data-testid="rewrite-length-trigger"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="short" data-testid="rewrite-length-short">Short</SelectItem>
+                    <SelectItem value="medium" data-testid="rewrite-length-medium">Medium</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>What you're pitching <span className="text-muted-foreground">· optional</span></Label>
+              <Input value={product} onChange={(e) => setProduct(e.target.value)} maxLength={400} placeholder="e.g. a shipping-cost analytics tool for DTC Shopify brands" data-testid="rewrite-product-input" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Target reader <span className="text-muted-foreground">· optional</span></Label>
+              <Input value={audience} onChange={(e) => setAudience(e.target.value)} maxLength={200} placeholder="e.g. founders doing $5M+ ARR" data-testid="rewrite-audience-input" />
+            </div>
+          </div>
+        )}
+        {preview && (
+          <div className="my-4 space-y-3" data-testid="rewrite-preview">
+            <div className="rounded-lg border border-border bg-background p-3">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Subject</Label>
+              <p className="mt-1 text-sm font-medium text-foreground" data-testid="rewrite-preview-subject">{preview.subject}</p>
+            </div>
+            {preview.preheader && (
+              <div className="rounded-lg border border-border bg-background p-3">
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Preheader</Label>
+                <p className="mt-1 text-xs text-foreground/90" data-testid="rewrite-preview-preheader">{preview.preheader}</p>
+              </div>
+            )}
+            <div className="rounded-lg border border-border bg-background p-3">
+              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Body</Label>
+              <pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-foreground/90" data-testid="rewrite-preview-body">{preview.body}</pre>
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          {!preview ? (
+            <>
+              <Button variant="outline" onClick={close} data-testid="rewrite-cancel">Cancel</Button>
+              <Button onClick={() => rewrite.mutate()} disabled={rewrite.isPending} data-testid="rewrite-generate">
+                {rewrite.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Generate
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setPreview(null)} data-testid="rewrite-tweak">Tweak settings</Button>
+              <Button onClick={() => { onApply(preview); close(); toast.success("Step updated with AI draft"); }} data-testid="rewrite-apply">Replace step</Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function SequenceTab({ campaign }: { campaign: Campaign }) {
   const qc = useQueryClient();
@@ -363,7 +669,7 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a + token.length, a + token.length); });
   };
   const add = () => {
-    setSteps([...steps, { id: `new-${uid()}`, subject: "", subject_b: "", ab_winner: null, body: "Hi {{first_name}},\n\n", delay_days: 3 }]);
+    setSteps([...steps, { id: `new-${uid()}`, subject: "", subject_b: "", ab_winner: null, body: "Hi {{first_name}},\n\n", delay_days: 3, preheader: "", track_opens: null, track_clicks: null }]);
     setActive(steps.length);
   };
   const remove = (i: number) => {
@@ -372,9 +678,33 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
     setActive(Math.max(0, Math.min(active, next.length - 1)));
   };
   const firstSubject = steps[0]?.subject ?? "";
+  const [rewriteOpen, setRewriteOpen] = useState(false);
+  const campaignScore = useMemo(
+    () => scoreCampaign({ steps, include_unsubscribe: campaign.include_unsubscribe }),
+    [steps, campaign.include_unsubscribe],
+  );
+  const applyFix = (stepIndex: number, item: SpamItem) => {
+    if (!item.fix) return;
+    setSteps((prev) => prev.map((s, i) => i === stepIndex ? { ...s, [item.fix!.kind]: item.fix!.newValue } : s));
+    setActive(stepIndex);
+    toast.success(`Applied: ${item.fix.label}`);
+  };
+  const applyRewrite = (r: RewriteResponse) => {
+    if (!cur) return;
+    patch({ subject: r.subject || cur.subject, body: r.body || cur.body, preheader: r.preheader || cur.preheader });
+  };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-12">
+    <div className="space-y-5">
+      <SpamScorePanel
+        score={campaignScore.score}
+        perStep={campaignScore.perStep}
+        campaignItems={campaignScore.campaignItems}
+        activeIndex={active}
+        onJumpStep={setActive}
+        onApplyFix={applyFix}
+      />
+      <div className="grid gap-6 lg:grid-cols-12">
       <div className="space-y-2 lg:col-span-4" data-testid="sequence-steps-list">
         {steps.map((s, i) => (
           <div key={s.id}>
@@ -416,9 +746,20 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
           <Panel
             title={`Step ${active + 1}`}
             action={
-              <Button size="sm" onClick={() => save.mutate()} disabled={!dirty || save.isPending} data-testid="sequence-save-button">
-                {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} {dirty ? "Save sequence" : "Saved"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setRewriteOpen(true)}
+                  className="border-cyan-500/40 text-cyan hover:border-cyan-500/70 hover:text-cyan"
+                  data-testid="sequence-rewrite-button"
+                >
+                  <Wand2 className="size-4" /> Rewrite with AI
+                </Button>
+                <Button size="sm" onClick={() => save.mutate()} disabled={!dirty || save.isPending} data-testid="sequence-save-button">
+                  {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} {dirty ? "Save sequence" : "Saved"}
+                </Button>
+              </div>
             }
             testId="sequence-editor"
           >
@@ -455,6 +796,49 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
                   </p>
                 </div>
               )}
+              <div className="space-y-1.5">
+                <Label>Preheader <span className="font-normal text-muted-foreground">· preview text in the inbox</span></Label>
+                <Input
+                  value={cur.preheader}
+                  onChange={(e) => patch({ preheader: e.target.value })}
+                  placeholder="Short teaser Gmail shows beside the subject (optional)"
+                  maxLength={140}
+                  data-testid="step-preheader-input"
+                />
+                <p className="text-xs text-muted-foreground">Hidden on open. Keep it under ~90 characters so it fits the inbox preview on mobile.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-background p-3" data-testid="step-tracking-overrides">
+                {([
+                  ["track_opens", "Open tracking", "Pixel on this step"],
+                  ["track_clicks", "Click tracking", "Rewrite links on this step"],
+                ] as const).map(([k, l, d]) => {
+                  const val = cur[k]; // null = inherit, true/false = override
+                  const choice: "inherit" | "on" | "off" = val === null ? "inherit" : val ? "on" : "off";
+                  return (
+                    <div key={k} className="space-y-1.5">
+                      <Label className="text-xs">{l}</Label>
+                      <div className="flex gap-1 rounded-md border border-border p-0.5">
+                        {([["inherit", "Inherit"], ["on", "On"], ["off", "Off"]] as const).map(([v, lbl]) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => patch({ [k]: v === "inherit" ? null : v === "on" } as Partial<Step>)}
+                            data-testid={`step-${k}-${v}`}
+                            className={cn(
+                              "flex-1 rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
+                              choice === v ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground/90",
+                            )}
+                            aria-pressed={choice === v}
+                          >
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{d}</p>
+                    </div>
+                  );
+                })}
+              </div>
               <div className="space-y-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Label>Body</Label>
@@ -504,6 +888,8 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
           </Panel>
         )}
       </div>
+      </div>
+      <RewriteDialog open={rewriteOpen} onClose={() => setRewriteOpen(false)} step={cur} onApply={applyRewrite} />
     </div>
   );
 }
@@ -529,6 +915,9 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
     gap_min_minutes: campaign.gap_min_minutes, gap_max_minutes: campaign.gap_max_minutes,
     random_start_minutes: campaign.random_start_minutes,
     send_start_hour: campaign.send_start_hour, send_end_hour: campaign.send_end_hour,
+    plain_text_only: campaign.plain_text_only, smart_subject: campaign.smart_subject,
+    extra_jitter_minutes: campaign.extra_jitter_minutes,
+    followup_priority: campaign.followup_priority,
   });
   const save = useMutation({
     mutationFn: () => apiPut<Campaign>(`/campaigns/${campaign.id}`, s),
@@ -684,6 +1073,83 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
                 <Switch checked={s[k]} onCheckedChange={(v) => setS({ ...s, [k]: v })} data-testid={`settings-${k}-switch`} />
               </label>
             ))}
+          </div>
+        </Panel>
+        <Panel title={<span className="flex items-center gap-2"><Timer className="size-4 text-cyan" />Human-send mode</span>} testId="settings-human-panel">
+          <div className="divide-y divide-border">
+            <label className="flex cursor-pointer items-center justify-between gap-4 px-5 py-3.5">
+              <div>
+                <p className="text-sm font-medium text-foreground">Plain-text only</p>
+                <p className="text-xs text-muted-foreground">Ship text/plain only — no HTML, no tracking pixel, raw URLs. Looks hand-typed to spam filters.</p>
+              </div>
+              <Switch checked={s.plain_text_only} onCheckedChange={(v) => setS({ ...s, plain_text_only: v })} data-testid="settings-plain_text_only-switch" />
+            </label>
+            <label className="flex cursor-pointer items-center justify-between gap-4 px-5 py-3.5">
+              <div>
+                <p className="text-sm font-medium text-foreground">Smart "Re:" subject</p>
+                <p className="text-xs text-muted-foreground">Follow-ups never show "Re: Re: Re:" — collapses stacked prefixes to one.</p>
+              </div>
+              <Switch checked={s.smart_subject} onCheckedChange={(v) => setS({ ...s, smart_subject: v })} data-testid="settings-smart_subject-switch" />
+            </label>
+            <div className="space-y-2 px-5 py-3.5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Extra jitter per send</p>
+                  <p className="text-xs text-muted-foreground">Shift each follow-up by ±N minutes so emails don't line up on the same clock minute.</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={30}
+                    value={s.extra_jitter_minutes}
+                    onChange={(e) => setS({ ...s, extra_jitter_minutes: Math.min(30, Math.max(0, Number(e.target.value) || 0)) })}
+                    className="w-20"
+                    data-testid="settings-extra-jitter-input"
+                  />
+                  <span className="text-xs text-muted-foreground">min</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[0, 3, 10, 20].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setS({ ...s, extra_jitter_minutes: m })}
+                    className={cn("rounded-md border px-2 py-0.5 font-mono text-[11px] transition-colors", s.extra_jitter_minutes === m ? "border-cyan-500/50 bg-cyan-500/10 text-cyan" : "border-input text-muted-foreground hover:text-foreground/90")}
+                    data-testid={`settings-extra-jitter-preset-${m}`}
+                  >
+                    {m === 0 ? "Off" : `±${m}m`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title={<span className="flex items-center gap-2"><Timer className="size-4 text-cyan" />Follow-up priority</span>} testId="settings-followup-panel">
+          <div className="space-y-3 p-5">
+            <div className="flex items-end justify-between text-[11px] uppercase tracking-wider text-muted-foreground">
+              <span>New leads</span>
+              <span className="font-mono text-sm normal-case tracking-normal text-foreground" data-testid="settings-followup-label">
+                {s.followup_priority === 50 ? "Balanced" : s.followup_priority >= 50 ? `${s.followup_priority}% Follow-ups` : `${100 - s.followup_priority}% New leads`}
+              </span>
+              <span>Follow-ups</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={s.followup_priority}
+              onChange={(e) => setS({ ...s, followup_priority: Number(e.target.value) })}
+              className="w-full accent-cyan-500"
+              data-testid="settings-followup-slider"
+              aria-label="Follow-up priority"
+            />
+            <p className="text-xs text-muted-foreground">
+              When the engine has limited daily capacity, this decides who gets served first. Drag right to drain follow-ups before touching new leads (keeps conversations warm). Drag left to prioritize fresh outreach.
+            </p>
           </div>
         </Panel>
         <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending} data-testid="settings-save-button">
