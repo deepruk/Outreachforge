@@ -84,7 +84,6 @@ function SideNav({ user, unread, senders, onNavigate }: { user?: User; unread: n
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-medium text-foreground">{user ? `${user.name.split(" ")[0]}'s workspace` : "Workspace"}</p>
-            <p className="text-[11px] text-muted-foreground">Self-hosted · Pro</p>
           </div>
           <ChevronsUpDown className="size-3.5 text-muted-foreground transition-colors group-hover:text-foreground" />
         </button>
