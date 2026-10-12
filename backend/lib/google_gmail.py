@@ -79,8 +79,21 @@ def _request(method: str, path: str, sender: dict, *, bearer_token: str | None =
     if response.status_code == 401:
         raise RuntimeError("Google authorization was rejected; reconnect this Gmail account")
     if response.status_code >= 400:
-        # Do not propagate raw provider payloads, which may contain mailbox metadata.
-        raise RuntimeError(f"Gmail API request failed (HTTP {response.status_code})")
+        # Log only Google's structured error reason/message; never log tokens or raw payloads.
+        try:
+            payload = response.json()
+            error = payload.get("error") or {}
+            details = error.get("errors") or []
+            reason = next((str(item.get("reason")) for item in details if item.get("reason")), "")
+            message = str(error.get("message") or "")
+        except (ValueError, AttributeError):
+            reason, message = "", ""
+        parts = [f"Gmail API request failed (HTTP {response.status_code})"]
+        if reason:
+            parts.append(f"reason={reason}")
+        if message:
+            parts.append(f"message={message[:240]}")
+        raise RuntimeError("; ".join(parts))
     return response
 
 
