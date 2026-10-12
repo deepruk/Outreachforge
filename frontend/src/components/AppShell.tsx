@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import {
   Activity, BarChart3, BookOpen, ChevronDown, ChevronsUpDown, CornerDownLeft, Inbox, LayoutDashboard, LifeBuoy, LogOut,
-  Mail, Menu, Moon, Plus, Search, Send, Server, Sun, Upload, User as UserIcon,
+  Mail, Menu, Moon, Plus, Search, Send, Server, Settings as SettingsIcon, Sun, Upload, User as UserIcon,
 } from "lucide-react";
 import { ApiError, apiGet } from "@/lib/api";
 import { endSession } from "@/lib/session";
@@ -295,6 +295,7 @@ export default function AppShell({ children, wide }: { children: ReactNode; wide
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate("/senders")}><UserIcon className="size-4" />Sender accounts</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/settings")} data-testid="user-menu-settings"><SettingsIcon className="size-4" />Account settings</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setTheme(resolvedTheme === "light" ? "dark" : "light")} data-testid="user-menu-theme">
                   {resolvedTheme === "light" ? <Moon className="size-4" /> : <Sun className="size-4" />}{resolvedTheme === "light" ? "Dark mode" : "Light mode"}
                 </DropdownMenuItem>
