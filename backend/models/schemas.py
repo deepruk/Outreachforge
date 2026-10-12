@@ -29,6 +29,17 @@ class WorkspaceUpdate(BaseModel):
     apply_signature_to_all_inboxes: bool = False
 
 
+class AccountProfileUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    email: EmailStr
+    current_password: str = Field(min_length=1, max_length=128)
+
+
+class PasswordUpdate(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 # ---------- senders ----------
 SenderStatus = Literal["active", "error", "paused", "demo"]
 
