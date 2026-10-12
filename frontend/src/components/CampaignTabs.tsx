@@ -789,7 +789,7 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setRewriteOpen(true)
+                  onClick={() => setRewriteOpen(true)}
                   className="border-cyan-500/40 text-cyan hover:border-cyan-500/70 hover:text-cyan"
                   data-testid="sequence-rewrite-button"
                 >
