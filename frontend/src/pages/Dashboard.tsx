@@ -38,25 +38,6 @@ export default function Dashboard() {
           <Link to="/campaigns?new=1" className={buttonVariants({ size: "sm" })} data-testid="dashboard-new-campaign"><Plus className="size-4" />New campaign</Link>
         </>}
       />
-      {steps.some((x) => !x.done) && (
-        <div className="mb-6 rounded-xl border border-border bg-panel p-5 animate-fade-up" data-testid="onboarding-checklist">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold text-foreground">Get your workspace sending</p>
-              <p className="text-sm text-muted-foreground">{steps.filter((x) => x.done).length} of {steps.length} steps complete</p>
-            </div>
-            <div className="h-1.5 w-40 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${(steps.filter((x) => x.done).length / steps.length) * 100}%` }} /></div>
-          </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            {steps.map((st, i) => (
-              <Link key={st.label} to={st.to} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors ${st.done ? "border-emerald-500/25 bg-emerald-500/[0.06] text-muted-foreground" : "border-border hover:border-primary/40 hover:bg-secondary/60"}`} data-testid={`onboarding-step-${i}`}>
-                <span className={`grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${st.done ? "bg-emerald-500 text-white" : "border border-border text-muted-foreground"}`}>{st.done ? <Check className="size-3.5" /> : i + 1}</span>
-                <span className={st.done ? "line-through" : "font-medium text-foreground"}>{st.label}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard testId="kpi-sent" label="Emails sent" value={v(t?.sent)} icon={Send} sub={`${v(t?.leads)} total leads`} />
         <StatCard testId="kpi-open-rate" label="Open rate" value={r(t?.open_rate)} icon={Eye} sub={`${v(t?.opened)} unique opens`} />
