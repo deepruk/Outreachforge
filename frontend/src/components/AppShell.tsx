@@ -71,13 +71,14 @@ const GROUPS = [
 const ALL_NAV = GROUPS.flatMap((g) => g.items);
 
 function SideNav({ user, unread, senders, onNavigate }: { user?: User; unread: number; senders: Sender[]; onNavigate?: () => void }) {
+  const navigate = useNavigate();
   const cap = senders.reduce((a, s) => a + s.effective_limit, 0);
   const used = senders.reduce((a, s) => a + s.sent_today, 0);
   return (
     <div className="flex h-full flex-col">
       <div className="px-4 pb-3 pt-5"><Logo to="/dashboard" /></div>
       <div className="px-3">
-        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-panel px-2.5 py-2" data-testid="workspace-switcher">
+        <button type="button" onClick={() => { navigate("/settings"); onNavigate?.(); }} aria-label="Open workspace and account settings" className="group flex w-full items-center gap-2.5 rounded-lg border border-border bg-panel px-2.5 py-2 text-left transition-colors hover:border-primary/40 hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-testid="workspace-switcher">
           <span className="grid size-7 place-items-center rounded-md bg-gradient-to-br from-zinc-700 to-zinc-900 text-[11px] font-bold text-white">
             {(user?.name ?? "W").slice(0, 1).toUpperCase()}
           </span>
@@ -85,8 +86,8 @@ function SideNav({ user, unread, senders, onNavigate }: { user?: User; unread: n
             <p className="truncate text-[13px] font-medium text-foreground">{user ? `${user.name.split(" ")[0]}'s workspace` : "Workspace"}</p>
             <p className="text-[11px] text-muted-foreground">Self-hosted · Pro</p>
           </div>
-          <ChevronsUpDown className="size-3.5 text-muted-foreground" />
-        </div>
+          <ChevronsUpDown className="size-3.5 text-muted-foreground transition-colors group-hover:text-foreground" />
+        </button>
       </div>
       <nav className="mt-4 flex-1 space-y-5 overflow-y-auto px-3 scroll-thin">
         {GROUPS.map((g) => (
