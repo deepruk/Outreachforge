@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from lib import mailer
 from lib.db import db
-from lib.util import new_id, now, start_of_today, warmup_info
+from lib.util import new_id, now, start_of_today
 
 log = logging.getLogger("engine")
 OOO_RE = re.compile(r"out of (the )?office|automatic reply|auto(-| )?reply|on vacation|on leave", re.I)
@@ -67,11 +67,11 @@ async def sent_today(sender_id: str) -> int:
 
 
 async def deliver(sender: dict, to: str, subject: str, html: str, text: str, in_reply_to: str | None,
-                  unsubscribe_url: str | None = None) -> str:
+                  unsubscribe_url: str | None = None, plain_only: bool = False) -> str:
     """Real SMTP for real senders; demo senders simulate delivery."""
     if sender.get("status") == "demo":
         return f"<{new_id()}@{sender['email'].split('@')[-1]}>"
-    return await asyncio.to_thread(mailer.send_email, sender, to, subject, html, text, in_reply_to, unsubscribe_url)
+    return await asyncio.to_thread(mailer.send_email, sender, to, subject, html, text, in_reply_to, unsubscribe_url, plain_only)
 
 
 async def pick_variant(c: dict, idx: int, step: dict) -> str:
@@ -171,11 +171,35 @@ async def process_campaign(c: dict) -> None:
     senders = await db.senders.find({"id": {"$in": c.get("sender_ids", [])}, "status": {"$in": ["active", "demo"]}}, {"_id": 0}).to_list(100)
     if not senders:
         return
-    capacity = {s["id"]: warmup_info(s)[0] - await sent_today(s["id"]) for s in senders}
+    capacity = {s["id"]: int(s.get("daily_limit") or 0) - await sent_today(s["id"]) for s in senders}
     leads = await db.leads.find(
         {"campaign_id": c["id"], "status": {"$in": ["pending", "in_progress"]}, "next_send_at": {"$lte": n}},
         {"_id": 0},
     ).sort("next_send_at", 1).to_list(200)
+    # Follow-up priority biases which bucket drains first: 100 = all follow-ups before new leads,
+    # 0 = all new leads first, 50 = round-robin interleave.
+    priority = max(0, min(100, int(c.get("followup_priority", 50) or 50)))
+    fu = [l for l in leads if (l.get("current_step") or 0) > 0]
+    nw = [l for l in leads if (l.get("current_step") or 0) == 0]
+    if fu and nw and priority not in (50,):
+        ordered: list[dict] = []
+        ifu = inw = 0
+        fu_target = round(len(leads) * priority / 100)
+        nw_target = len(leads) - fu_target
+        while ifu + inw < len(leads):
+            pick_fu = (ifu / max(fu_target, 1)) <= (inw / max(nw_target, 1)) and ifu < len(fu)
+            if pick_fu:
+                ordered.append(fu[ifu]); ifu += 1
+            elif inw < len(nw):
+                ordered.append(nw[inw]); inw += 1
+            elif ifu < len(fu):
+                ordered.append(fu[ifu]); ifu += 1
+            else:
+                break
+        leads = ordered
+    # Fetch the workspace default signature once per campaign tick; used as a fallback below.
+    user = await db.users.find_one({"id": c["user_id"]}, {"_id": 0, "default_signature": 1})
+    workspace_signature = ((user or {}).get("default_signature") or "").strip()
     sent_now = 0
     for lead in leads:
         if sent_now >= min(budget, 25):
@@ -212,13 +236,37 @@ async def process_campaign(c: dict) -> None:
             subject = "Re: " + (first["subject"] if first else "Quick question")
         raw_body = step.get("body") or ""
         body = mailer.spin(mailer.render_vars(raw_body, lead, {"unsubscribe_link": unsub_url}))
+        # Per-inbox signature rotation — stable per lead so follow-ups keep the same sign-off.
+        sigs = [s for s in (sender.get("signatures") or []) if (s or "").strip()]
+        if not sigs and workspace_signature:
+            # Fall back to the workspace-level default when the inbox has none of its own.
+            sigs = [workspace_signature]
+        if sigs:
+            seed = int(hashlib.sha256(f"{sender['id']}:{lead['id']}".encode()).hexdigest(), 16)
+            sig = sigs[seed % len(sigs)]
+            if sig.strip() and sig.strip() not in body:
+                body = body.rstrip() + "\n\n" + sig.strip() + "\n"
         if c.get("include_unsubscribe", True) and "unsubscribe_link" not in raw_body:
             body += UNSUB_FOOTER.format(url=unsub_url)
-        html = mailer.build_html(body, mid, base_url(), c.get("track_opens", True), c.get("track_clicks", True))
+        # Smart subject: don't accumulate "Re: Re:" prefixes on follow-ups.
+        if c.get("smart_subject") and subject:
+            subject = re.sub(r"^(?:\s*re\s*:\s*)+", "Re: ", subject, flags=re.I).strip() or subject
+        # Per-step tracking overrides (None = inherit campaign default).
+        s_opens = step.get("track_opens")
+        s_clicks = step.get("track_clicks")
+        track_opens = c.get("track_opens", True) if s_opens is None else bool(s_opens)
+        track_clicks = c.get("track_clicks", True) if s_clicks is None else bool(s_clicks)
+        plain_only = bool(c.get("plain_text_only"))
+        if plain_only:
+            # Plain-text-only mode disables all tracking — no pixel, raw URLs.
+            track_opens = False
+            track_clicks = False
+        html = mailer.build_html(body, mid, base_url(), track_opens, track_clicks, preheader=step.get("preheader", ""))
         try:
             header_id = await deliver(sender, lead["email"], subject, html, body,
                                       first["message_id_header"] if first else None,
-                                      unsub_url if c.get("include_unsubscribe", True) else None)
+                                      unsub_url if c.get("include_unsubscribe", True) else None,
+                                      plain_only=plain_only)
         except Exception as e:  # noqa: BLE001
             err = str(e)[:300]
             log.warning("send failed %s -> %s: %s", sender["email"], lead["email"], err)
@@ -246,7 +294,11 @@ async def process_campaign(c: dict) -> None:
         if nxt >= len(steps):
             upd.update(status="completed", next_send_at=None)
         else:
-            upd.update(status="in_progress", next_send_at=now() + timedelta(days=steps[nxt].get("delay_days", 1)))
+            # Extra jitter (opt-in) shifts the next send by up to ±N minutes so follow-ups
+            # don't line up on a predictable "exactly N days later" slot.
+            jitter_m = int(c.get("extra_jitter_minutes", 0) or 0)
+            jitter = timedelta(seconds=random.uniform(-jitter_m * 60, jitter_m * 60)) if jitter_m else timedelta(0)
+            upd.update(status="in_progress", next_send_at=now() + timedelta(days=steps[nxt].get("delay_days", 1)) + jitter)
         await db.leads.update_one({"id": lead["id"]}, {"$set": upd})
     remaining = await db.leads.count_documents({"campaign_id": c["id"], "status": {"$in": ["pending", "in_progress"]}})
     if remaining == 0:
