@@ -5,6 +5,7 @@ import Dashboard from "@/pages/Dashboard";
 import Campaigns from "@/pages/Campaigns";
 import CampaignDetail from "@/pages/CampaignDetail";
 import MasterInbox from "@/pages/MasterInbox";
+import Bounces from "@/pages/Bounces";
 import SenderAccounts from "@/pages/SenderAccounts";
 import Analytics from "@/pages/Analytics";
 import ActivityLog from "@/pages/ActivityLog";
@@ -21,6 +22,7 @@ export default function App() {
       <Route path="/campaigns" element={<Campaigns />} />
       <Route path="/campaigns/:id" element={<CampaignDetail />} />
       <Route path="/inbox" element={<MasterInbox />} />
+      <Route path="/bounces" element={<Bounces />} />
       <Route path="/senders" element={<SenderAccounts />} />
       <Route path="/analytics" element={<Analytics />} />
       <Route path="/activity" element={<ActivityLog />} />
