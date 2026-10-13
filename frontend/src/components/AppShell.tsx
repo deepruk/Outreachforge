@@ -3,7 +3,7 @@ import { Link, NavLink, Navigate, useLocation, useNavigate } from "react-router-
 import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import {
-  Activity, BarChart3, BookOpen, ChevronDown, ChevronsUpDown, CornerDownLeft, Inbox, LayoutDashboard, LifeBuoy, LogOut,
+  Activity, AlertTriangle, BarChart3, BookOpen, ChevronDown, ChevronsUpDown, CornerDownLeft, Inbox, LayoutDashboard, LifeBuoy, LogOut,
   Mail, Menu, Moon, Plus, Search, Send, Server, Settings as SettingsIcon, Sun, Upload, User as UserIcon,
 } from "lucide-react";
 import { ApiError, apiGet } from "@/lib/api";
@@ -57,6 +57,7 @@ const GROUPS = [
     items: [
       { to: "/campaigns", label: "Campaigns", icon: Mail, id: "campaigns" },
       { to: "/inbox", label: "Master Inbox", icon: Inbox, id: "inbox" },
+      { to: "/bounces", label: "Bounces", icon: AlertTriangle, id: "bounces" },
       { to: "/senders", label: "Sender Accounts", icon: Server, id: "senders" },
     ],
   },
