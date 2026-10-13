@@ -478,7 +478,7 @@ async def run_forever() -> None:
     while True:
         try:
             await send_tick()
-            if i % 10 == 0:  # Reply sync every ~5 minutes to reduce Gmail API quota pressure
+            if i % 40 == 0:  # Reply sync immediately on startup, then approximately every 20 minutes
                 await sync_tick()
         except Exception:  # noqa: BLE001
             log.exception("engine tick failed")
