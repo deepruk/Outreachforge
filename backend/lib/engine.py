@@ -365,19 +365,49 @@ async def sync_sender(sender: dict) -> int:
             continue
         if any(b in m["from_email"] for b in BOUNCE_FROM) or any(
             marker in (m.get("subject") or "").lower()
-            for marker in ("undeliverable", "delivery status notification", "delivery failure")
+            for marker in ("undeliverable", "delivery status notification", "delivery failure", "delivery has failed", "mail delivery failed")
         ):
-            for addr in set(EMAIL_RE.findall(m.get("body", ""))):
+            # Always retain the original bounce notice, even when the recipient cannot
+            # be matched confidently. This preserves evidence for manual review.
+            bounce_body = (m.get("body") or "")[:30000]
+            recipients = set(addr.lower() for addr in EMAIL_RE.findall(bounce_body))
+            matched = []
+            for addr in recipients:
                 lead = await db.leads.find_one(
-                    {"user_id": uid, "email": addr.lower(), "status": {"$in": ["in_progress", "completed"]}},
+                    {"user_id": uid, "email": addr},
                     {"_id": 0},
                 )
-                if lead:
-                    await db.leads.update_one(
-                        {"id": lead["id"]}, {"$set": {"status": "bounced", "next_send_at": None}}
-                    )
-                    await db.messages.update_many({"lead_id": lead["id"]}, {"$set": {"bounced": True}})
-                    await db.campaigns.update_one({"id": lead["campaign_id"]}, {"$inc": {"bounces": 1}})
+                if not lead:
+                    continue
+                sent_message = await db.messages.find_one(
+                    {"user_id": uid, "lead_id": lead["id"], "sent_at": {"$exists": True}},
+                    {"_id": 0, "id": 1},
+                )
+                if sent_message:
+                    matched.append((lead, addr))
+            event_key = m.get("message_id") or f"{sender['id']}:{m.get('uid', max_uid)}"
+            await db.bounce_events.update_one(
+                {"user_id": uid, "event_key": event_key},
+                {"$setOnInsert": {
+                    "id": new_id(), "user_id": uid, "sender_id": sender["id"],
+                    "from_email": m["from_email"], "to_email": sender["email"],
+                    "subject": m.get("subject") or "(no subject)", "body": bounce_body,
+                    "at": m.get("at") or now(), "event_key": event_key,
+                    "matched_recipients": sorted({addr for _, addr in matched}),
+                    "matched_campaign_ids": sorted({lead["campaign_id"] for lead, _ in matched}),
+                    "status": "matched" if matched else "needs_review",
+                }},
+            )
+            for lead, addr in matched:
+                # A lead may be mentioned in an unrelated part of a DSN; only update it
+                # when the notice contains a recipient address and the lead has sent mail.
+                await db.leads.update_one(
+                    {"id": lead["id"], "status": {"$ne": "bounced"}},
+                    {"$set": {"status": "bounced", "next_send_at": None}}
+                )
+                await db.messages.update_many(
+                    {"user_id": uid, "lead_id": lead["id"]}, {"$set": {"bounced": True}}
+                )
             continue
         lead = None
         refs = [r for r in (m["in_reply_to"] + " " + m["references"]).split() if r]
