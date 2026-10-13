@@ -76,8 +76,8 @@ def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_c
             '<div style="margin-top:22px;padding-top:14px;border-top:1px solid #e5e7eb;'
             'font-family:Arial,sans-serif;font-size:12px;color:#6b7280;">'
             '<a href="' + html.escape(unsubscribe_url, quote=True) + '" '
-            'style="display:inline-block;padding:9px 16px;background:#f3f4f6;color:#374151;'
-            'text-decoration:none;border:1px solid #d1d5db;border-radius:5px;font-size:12px;'
+            'style="display:inline-block;padding:6px 11px;background:#f3f4f6;color:#374151;'
+            'text-decoration:none;border:1px solid #d1d5db;border-radius:4px;font-size:11px;'
             'font-weight:600;">Unsubscribe</a></div>'
         )
     escaped = html.escape(normalized)
