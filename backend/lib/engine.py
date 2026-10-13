@@ -388,7 +388,7 @@ async def sync_sender(sender: dict) -> int:
                 )
                 if sent_message:
                     matched.append((lead, addr))
-            event_key = m.get("message_id") or f"{sender['id']}:{m.get('uid', max_uid)}"
+            event_key = m.get("message_id") or hashlib.sha256((sender["id"] + "|" + m.get("from_email", "") + "|" + (m.get("subject") or "") + "|" + bounce_body).encode("utf-8", "ignore")).hexdigest()
             await db.bounce_events.update_one(
                 {"user_id": uid, "event_key": event_key},
                 {"$setOnInsert": {
