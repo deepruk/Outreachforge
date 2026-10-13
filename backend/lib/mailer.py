@@ -60,6 +60,26 @@ def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_c
                preheader: str = "") -> str:
     """Build HTML while preserving safe text escaping and stable per-message tracking IDs."""
     normalized = (body or "").replace("\r\n", "\n").replace("\r", "\n")
+    # Convert the standard unsubscribe footer to a compact HTML button.
+    # Accept both absolute URLs and legacy relative /api/u/... paths.
+    unsubscribe_match = re.search(
+        r"(?im)(?:\n\s*){1,3}--\s*\n\s*Not interested\?\s*Unsubscribe here:\s*(https?://\S+|/api/u/\S+)\s*$",
+        normalized,
+    )
+    unsubscribe_button = ""
+    if unsubscribe_match:
+        unsubscribe_url = unsubscribe_match.group(1).rstrip(".,)")
+        if unsubscribe_url.startswith("/"):
+            unsubscribe_url = base_url.rstrip("/") + unsubscribe_url
+        normalized = normalized[:unsubscribe_match.start()].rstrip()
+        unsubscribe_button = (
+            '<div style="margin-top:22px;padding-top:14px;border-top:1px solid #e5e7eb;'
+            'font-family:Arial,sans-serif;font-size:12px;color:#6b7280;">'
+            '<a href="' + html.escape(unsubscribe_url, quote=True) + '" '
+            'style="display:inline-block;padding:9px 16px;background:#f3f4f6;color:#374151;'
+            'text-decoration:none;border:1px solid #d1d5db;border-radius:5px;font-size:12px;'
+            'font-weight:600;">Unsubscribe</a></div>'
+        )
     escaped = html.escape(normalized)
 
     def link(m: re.Match) -> str:
@@ -85,6 +105,7 @@ def build_html(body: str, msg_id: str, base_url: str, track_opens: bool, track_c
             '</span>'
         )
     out += "<div style=\"font-family:Arial,sans-serif;font-size:14px;line-height:1.5\">" + escaped.replace("\n", "<br>") + "</div>"
+    out += unsubscribe_button
     if track_opens:
         pixel_url = f"{base_url}/api/t/o/{msg_id}.gif"
         out += f'<img src="{html.escape(pixel_url, quote=True)}" width="1" height="1" alt="" style="display:none">'
