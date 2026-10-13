@@ -47,6 +47,7 @@ async def notify_hot_reply(user_id: str, thread_id: str, label: str, contact_nam
     })
 BOUNCE_FROM = ("mailer-daemon", "postmaster")
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+DSN_RECIPIENT_RE = re.compile(r"(?im)^\s*(?:Final-Recipient|Original-Recipient|X-Failed-Recipients|Failed-Recipient)\s*:\s*(?:rfc822\s*;\s*)?([^\s;<>]+@[^\s;<>]+)")
 AB_MIN_SENDS = int(os.environ.get("AB_MIN_SENDS", "20"))  # per variant before a winner is picked
 UNSUB_FOOTER = "\n\n--\nNot interested? Unsubscribe here: {url}"
 
