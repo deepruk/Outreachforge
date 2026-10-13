@@ -370,9 +370,11 @@ async def sync_sender(sender: dict) -> int:
             # Always retain the original bounce notice, even when the recipient cannot
             # be matched confidently. This preserves evidence for manual review.
             bounce_body = (m.get("body") or "")[:30000]
-            recipients = set(addr.lower() for addr in EMAIL_RE.findall(bounce_body))
+            # Only auto-classify recipients explicitly named by a delivery-status notice.
+            # Addresses in quoted text are not reliable proof of a failed delivery.
+            explicit_recipients = {addr.lower().strip(".,;<>") for addr in DSN_RECIPIENT_RE.findall(bounce_body)}
             matched = []
-            for addr in recipients:
+            for addr in explicit_recipients:
                 lead = await db.leads.find_one(
                     {"user_id": uid, "email": addr},
                     {"_id": 0},
@@ -394,6 +396,7 @@ async def sync_sender(sender: dict) -> int:
                     "subject": m.get("subject") or "(no subject)", "body": bounce_body,
                     "at": m.get("at") or now(), "event_key": event_key,
                     "matched_recipients": sorted({addr for _, addr in matched}),
+                    "candidate_addresses": sorted(set(EMAIL_RE.findall(bounce_body))),
                     "matched_campaign_ids": sorted({lead["campaign_id"] for lead, _ in matched}),
                     "status": "matched" if matched else "needs_review",
                 }},
