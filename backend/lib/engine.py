@@ -347,8 +347,10 @@ async def record_reply(user_id: str, lead: dict, sender_id: str, subject: str, b
     camp = await db.campaigns.find_one({"id": lead["campaign_id"]}, {"_id": 0, "stop_on_reply": 1})
     if label != "out_of_office" and (camp or {}).get("stop_on_reply", True):
         await db.leads.update_one({"id": lead["id"]}, {"$set": {"status": "replied", "next_send_at": None}})
+    # Every inbound reply counts in campaign analytics, including out-of-office replies.
+    # Keep out-of-office labeling and stop-on-reply behavior separate from reply counting.
     last = await db.messages.find({"lead_id": lead["id"]}, {"_id": 0, "id": 1, "replied_at": 1}).sort("sent_at", -1).to_list(1)
-    if last and not last[0].get("replied_at") and label != "out_of_office":
+    if last and not last[0].get("replied_at"):
         await db.messages.update_one({"id": last[0]["id"]}, {"$set": {"replied_at": at}})
         await db.campaigns.update_one({"id": lead["campaign_id"]}, {"$inc": {"replies": 1}})
     return True
