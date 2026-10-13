@@ -47,6 +47,28 @@ async def list_threads(label: Optional[str] = None, q: str = "", campaign_id: Op
     return await _enrich(docs)
 
 
+@router.get("/bounces")
+async def list_bounces(limit: int = Query(200, ge=1, le=1000), user: dict = Depends(current_user)):
+    """Return retained raw delivery-failure notices, including unmatched notices for review."""
+    rows = await db.bounce_events.find(
+        {"user_id": user["id"]},
+        {"_id": 0, "id": 1, "sender_id": 1, "from_email": 1, "to_email": 1, "subject": 1,
+         "body": 1, "at": 1, "matched_recipients": 1, "matched_campaign_ids": 1, "status": 1},
+    ).sort("at", -1).to_list(limit)
+    campaign_ids = list({cid for row in rows for cid in row.get("matched_campaign_ids", [])})
+    campaigns = {c["id"]: c["name"] for c in await db.campaigns.find(
+        {"user_id": user["id"], "id": {"$in": campaign_ids}}, {"_id": 0, "id": 1, "name": 1}
+    ).to_list(1000)}
+    sender_ids = list({row.get("sender_id") for row in rows if row.get("sender_id")})
+    senders = {s["id"]: s["email"] for s in await db.senders.find(
+        {"user_id": user["id"], "id": {"$in": sender_ids}}, {"_id": 0, "id": 1, "email": 1}
+    ).to_list(1000)}
+    for row in rows:
+        row["sender_email"] = senders.get(row.get("sender_id"), "")
+        row["campaign_names"] = [campaigns[cid] for cid in row.get("matched_campaign_ids", []) if cid in campaigns]
+    return {"items": rows, "count": len(rows)}
+
+
 @router.get("/counts", response_model=InboxCounts)
 async def counts(user: dict = Depends(current_user)):
     out = InboxCounts(all=await db.threads.count_documents({"user_id": user["id"]}),
