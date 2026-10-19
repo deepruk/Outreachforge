@@ -171,6 +171,15 @@ export type RewriteTone = "professional" | "casual" | "friendly" | "direct";
 export type RewriteGoal = "cold_intro" | "followup" | "breakup";
 export type RewriteLength = "short" | "medium";
 
+export interface BusinessProfile {
+  website: string;
+  company_summary: string;
+  services: string[];
+  ideal_customers: string[];
+  value_propositions: string[];
+  proof_points: string[];
+}
+
 export interface RewriteRequest {
   step: { subject: string; subject_b: string; body: string; preheader: string };
   tone: RewriteTone;
@@ -178,6 +187,8 @@ export interface RewriteRequest {
   length: RewriteLength;
   product?: string;
   audience?: string;
+  business_profile?: BusinessProfile;
+  selected_service?: string;
 }
 
 export interface RewriteResponse {
