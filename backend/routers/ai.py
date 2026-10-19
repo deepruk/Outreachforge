@@ -282,10 +282,14 @@ async def website_profile(req: WebsiteProfileRequest, _user=Depends(current_user
     response = await _gemini_generate(model, api_key, payload)
     if response.is_error:
         try:
+    if response.is_error:
+        try:
             detail = response.json().get("error", {}).get("message", "")
         except (ValueError, AttributeError):
             detail = ""
-        raise HTTPException(status_code=502, detail=f"Gemini website analysis failed after retries ({response.status_code}). {detail[:300] or \"Google may be temporarily overloaded; please retry in a minute.\"}")
+        if not detail:
+            detail = "Google may be temporarily overloaded; please retry in a minute."
+        raise HTTPException(status_code=502, detail=f"Gemini website analysis failed after retries ({response.status_code}). {detail[:300]}")
     try:
         raw = "".join(p.get("text", "") for p in response.json()["candidates"][0]["content"]["parts"])
         data = _parse_llm_json(raw)
