@@ -564,7 +564,7 @@ function RewriteDialog({
       const payload: RewriteRequest & { business_profile?: WebsiteProfile; selected_service?: string } = {
         step: { subject: step.subject, subject_b: step.subject_b, body: step.body, preheader: step.preheader },
         tone, goal, length,
-        product: (selectedService || product).trim() || undefined,
+        product: (selectedService && selectedService !== "__best_fit__" ? selectedService : product).trim() || undefined,
         audience: audience.trim() || undefined,
         business_profile: profile || undefined,
         selected_service: selectedService || product.trim(),
@@ -583,7 +583,7 @@ function RewriteDialog({
   const listText = (values: string[]) => values.join("\n");
   const setProfileField = (key: keyof Omit<WebsiteProfile, "website">, value: string) => {
     if (!profile) return;
-    setProfile({ ...profile, [key]: key === "company_summary" ? value : value.split("\n").map((v) => v.trim()).filter(Boolean) });
+    setProfile({ ...profile, [key]: key === "company_summary" ? value : value.split("\n").map((v) => v.trim()).filter(Boolean) } as WebsiteProfile);
   };
 
   return (
