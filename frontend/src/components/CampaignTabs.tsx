@@ -551,7 +551,7 @@ function RewriteDialog({
     mutationFn: () => apiPost<WebsiteProfile>("/ai/website-profile", { website: website.trim() }),
     onSuccess: (result) => {
       setProfile(result);
-      setSelectedService(result.services[0] || "");
+      setSelectedService("__best_fit__");
       setProduct("");
       toast.success("Website profile extracted. Review the facts before generating.");
     },
