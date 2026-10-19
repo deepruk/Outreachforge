@@ -5,6 +5,7 @@ the frontend swaps straight into the editor. The API key stays server-side.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -208,6 +209,35 @@ async def _fetch_public_page(client: httpx.AsyncClient, url: str) -> tuple[str, 
     return " ".join(parser.parts)[:9000], parser.links
 
 
+async def _gemini_generate(model: str, api_key: str, payload: dict) -> httpx.Response:
+    """Retry transient Gemini overload/rate-limit failures with bounded backoff."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    async with httpx.AsyncClient(timeout=40.0) as client:
+        for attempt in range(3):
+            try:
+                response = await client.post(url, headers={"x-goog-api-key": api_key, "Content-Type": "application/json"}, json=payload)
+            except httpx.TimeoutException:
+                if attempt < 2:
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                    continue
+                raise HTTPException(status_code=504, detail="Gemini timed out after retries. Please try again.")
+            except httpx.HTTPError:
+                if attempt < 2:
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                    continue
+                raise HTTPException(status_code=502, detail="Could not connect to Gemini after retries.")
+            if response.status_code not in (429, 500, 502, 503, 504):
+                return response
+            if attempt < 2:
+                retry_after = response.headers.get("retry-after", "")
+                try:
+                    delay = min(8.0, max(1.0, float(retry_after)))
+                except ValueError:
+                    delay = 1.5 * (attempt + 1)
+                await asyncio.sleep(delay)
+    return response
+
+
 @router.post("/website-profile", response_model=BusinessProfile)
 async def website_profile(req: WebsiteProfileRequest, _user=Depends(current_user)) -> BusinessProfile:
     api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
@@ -249,20 +279,13 @@ async def website_profile(req: WebsiteProfileRequest, _user=Depends(current_user
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1},
     }
-    try:
-        async with httpx.AsyncClient(timeout=35.0) as client:
-            response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"}, json=payload
-            )
-    except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Could not connect to Google's Gemini API.")
+    response = await _gemini_generate(model, api_key, payload)
     if response.is_error:
         try:
             detail = response.json().get("error", {}).get("message", "")
         except (ValueError, AttributeError):
             detail = ""
-        raise HTTPException(status_code=502, detail=f"Gemini website analysis failed ({response.status_code}). {detail[:300]}")
+        raise HTTPException(status_code=502, detail=f"Gemini website analysis failed after retries ({response.status_code}). {detail[:300] or \"Google may be temporarily overloaded; please retry in a minute.\"}")
     try:
         raw = "".join(p.get("text", "") for p in response.json()["candidates"][0]["content"]["parts"])
         data = _parse_llm_json(raw)
@@ -294,17 +317,7 @@ async def rewrite_step(req: RewriteRequest, _user=Depends(current_user)) -> Rewr
         },
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=35.0) as client:
-            response = await client.post(
-                url,
-                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
-                json=payload,
-            )
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Gemini took too long to respond. Please try again.")
-    except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Could not connect to Google's Gemini API. Please try again.")
+    response = await _gemini_generate(model, api_key, payload)
 
     if response.status_code in (400, 401, 403):
         raise HTTPException(
