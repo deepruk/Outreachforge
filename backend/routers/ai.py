@@ -114,7 +114,7 @@ async def rewrite_step(req: RewriteRequest, _user=Depends(current_user)) -> Rewr
 
     # Use a free-tier eligible Gemini model by default. Override with GEMINI_MODEL
     # if Google changes model availability for the project's region/tier.
-    model = (os.environ.get("GEMINI_MODEL") or "gemini-2.5-flash").strip()
+    model = (os.environ.get("GEMINI_MODEL") or "gemini-3.8-flash").strip()
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     payload = {
         "system_instruction": {"parts": [{"text": _SYSTEM}]},
