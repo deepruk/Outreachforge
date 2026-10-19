@@ -187,6 +187,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
               <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="h-8 w-40 pl-8 text-xs sm:w-56" data-testid="lead-search-input" />
             </div>
+            </div>
             <Select value={status} onValueChange={(v: string) => setStatus(v)}>
               <SelectTrigger size="sm" className="w-36" data-testid="lead-status-filter">
                 <SelectValue>{(v) => {
