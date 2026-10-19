@@ -1,7 +1,7 @@
-"""AI Copywriter — rewrites a sequence step using the user's own OpenAI key.
+"""AI Copywriter — rewrites a sequence step using Google's Gemini API.
 
 Keeps the user's template variables intact and returns a strict JSON payload
-the frontend swaps straight into the editor.
+the frontend swaps straight into the editor. The API key stays server-side.
 """
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import os
 import re
 from typing import Literal
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -35,8 +36,8 @@ class RewriteRequest(BaseModel):
     tone: Tone = "professional"
     goal: Goal = "cold_intro"
     length: Length = "short"
-    product: str = Field(default="", max_length=400)  # one-liner about what you're pitching
-    audience: str = Field(default="", max_length=200)  # who you're writing to (e.g. "e‑commerce founders")
+    product: str = Field(default="", max_length=400)
+    audience: str = Field(default="", max_length=200)
 
 
 class RewriteResponse(BaseModel):
@@ -93,45 +94,71 @@ _JSON_BLOCK = re.compile(r"\{[\s\S]*\}")
 
 def _parse_llm_json(text: str) -> dict:
     text = text.strip()
-    # Some models wrap JSON in ```json fences.
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
         text = text.rstrip("`").rstrip()
-    m = _JSON_BLOCK.search(text)
-    if not m:
+    match = _JSON_BLOCK.search(text)
+    if not match:
         raise ValueError("no JSON object in model output")
-    return json.loads(m.group(0))
+    return json.loads(match.group(0))
 
 
 @router.post("/rewrite-step", response_model=RewriteResponse)
 async def rewrite_step(req: RewriteRequest, _user=Depends(current_user)) -> RewriteResponse:
-    api_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    api_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
     if not api_key:
         raise HTTPException(
             status_code=400,
-            detail="Add OPENAI_API_KEY to backend/.env to use AI rewrite. Grab a key at platform.openai.com → API keys.",
+            detail="AI email writing is not configured. Add GEMINI_API_KEY to the backend service's environment variables.",
         )
-    # Import here so the module loads even when emergentintegrations is temporarily unavailable.
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
 
-    chat = (
-        LlmChat(api_key=api_key, session_id="rewrite-step", system_message=_SYSTEM)
-        .with_model("openai", "gpt-5.2")
-    )
-    try:
-        reply = await chat.send_message(UserMessage(text=_build_prompt(req)))
-    except Exception as exc:  # the SDK raises provider-specific errors; map to 502
-        msg = str(exc)
-        if "invalid_api_key" in msg or "Incorrect API key" in msg or "401" in msg:
-            raise HTTPException(status_code=400, detail="That OpenAI key was rejected. Double-check the value in backend/.env.")
-        if "rate_limit" in msg or "429" in msg:
-            raise HTTPException(status_code=429, detail="OpenAI is rate-limiting your key. Try again in a minute.")
-        raise HTTPException(status_code=502, detail=f"OpenAI call failed: {msg[:200]}")
+    # Use a free-tier eligible Gemini model by default. Override with GEMINI_MODEL
+    # if Google changes model availability for the project's region/tier.
+    model = (os.environ.get("GEMINI_MODEL") or "gemini-2.5-flash").strip()
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    payload = {
+        "system_instruction": {"parts": [{"text": _SYSTEM}]},
+        "contents": [{"role": "user", "parts": [{"text": _build_prompt(req)}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0.7,
+        },
+    }
 
     try:
-        data = _parse_llm_json(reply if isinstance(reply, str) else str(reply))
-    except Exception:
-        raise HTTPException(status_code=502, detail="AI returned a response we couldn't parse. Try again.")
+        async with httpx.AsyncClient(timeout=35.0) as client:
+            response = await client.post(
+                url,
+                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+                json=payload,
+            )
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Gemini took too long to respond. Please try again.")
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Could not connect to Google's Gemini API. Please try again.")
+
+    if response.status_code in (400, 401, 403):
+        raise HTTPException(
+            status_code=400,
+            detail="Google rejected the Gemini API request. Check GEMINI_API_KEY, model availability, and API access in Google AI Studio.",
+        )
+    if response.status_code == 429:
+        raise HTTPException(
+            status_code=429,
+            detail="Gemini API quota or rate limit reached. Wait a little and try again; free-tier limits apply.",
+        )
+    if response.status_code >= 500:
+        raise HTTPException(status_code=502, detail="Google's Gemini service is temporarily unavailable. Please try again.")
+    if response.is_error:
+        raise HTTPException(status_code=502, detail=f"Gemini API request failed with status {response.status_code}.")
+
+    try:
+        result = response.json()
+        parts = result["candidates"][0]["content"]["parts"]
+        reply = "".join(part.get("text", "") for part in parts)
+        data = _parse_llm_json(reply)
+    except (ValueError, KeyError, IndexError, TypeError, json.JSONDecodeError):
+        raise HTTPException(status_code=502, detail="Gemini returned a response we couldn't parse. Try again.")
 
     return RewriteResponse(
         subject=str(data.get("subject", "")).strip()[:200],
