@@ -547,7 +547,7 @@ function RewriteDialog({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl scroll-thin" data-testid="rewrite-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Wand2 className="size-4 text-cyan" /> Rewrite with AI</DialogTitle>
-          <DialogDescription>Keeps every <span className="font-mono text-foreground/80">{"{{variable}}"}</span> intact. Needs <span className="font-mono text-foreground/80">OPENAI_API_KEY</span> in backend/.env.</DialogDescription>
+          <DialogDescription>Keeps every <span className="font-mono text-foreground/80">{"{{variable}}"}</span> intact. Uses Google Gemini. Configure <span className="font-mono text-foreground/80">GEMINI_API_KEY</span> in your backend environment.</DialogDescription>
         </DialogHeader>
         {!preview && (
           <div className="my-4 space-y-4">
