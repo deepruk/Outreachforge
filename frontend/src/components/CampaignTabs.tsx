@@ -511,7 +511,24 @@ function SpamScorePanel({
   );
 }
 
-// -------- AI "Rewrite with AI" dialog --------
+// -------- Website-aware AI email writer --------
+type WebsiteProfile = {
+  website: string;
+  company_summary: string;
+  services: string[];
+  ideal_customers: string[];
+  value_propositions: string[];
+  proof_points: string[];
+};
+
+const PROFILE_FIELDS: { key: keyof Omit<WebsiteProfile, "website">; label: string; help: string }[] = [
+  { key: "company_summary", label: "Company summary", help: "One or two factual sentences about the business." },
+  { key: "services", label: "Services", help: "One service per line." },
+  { key: "ideal_customers", label: "Ideal customers", help: "One audience or industry per line." },
+  { key: "value_propositions", label: "Value propositions", help: "One value or benefit per line." },
+  { key: "proof_points", label: "Proof points", help: "Only verifiable results, case studies, or claims." },
+];
+
 function RewriteDialog({
   open, onClose, step, onApply,
 }: {
@@ -524,53 +541,110 @@ function RewriteDialog({
   const [goal, setGoal] = useState<RewriteGoal>("cold_intro");
   const [length, setLength] = useState<RewriteLength>("short");
   const [product, setProduct] = useState("");
-  const [audience, setAudience] = useState("");
+  const [audience, setAudience] = useState("Marketing agencies");
+  const [website, setWebsite] = useState("https://rohence.com");
+  const [profile, setProfile] = useState<WebsiteProfile | null>(null);
+  const [selectedService, setSelectedService] = useState("");
   const [preview, setPreview] = useState<RewriteResponse | null>(null);
+
+  const research = useMutation({
+    mutationFn: () => apiPost<WebsiteProfile>("/ai/website-profile", { website: website.trim() }),
+    onSuccess: (result) => {
+      setProfile(result);
+      setSelectedService(result.services[0] || "");
+      setProduct("");
+      toast.success("Website profile extracted. Review the facts before generating.");
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+
   const rewrite = useMutation({
     mutationFn: () => {
       if (!step) throw new Error("No step");
-      const payload: RewriteRequest = {
+      const payload: RewriteRequest & { business_profile?: WebsiteProfile; selected_service?: string } = {
         step: { subject: step.subject, subject_b: step.subject_b, body: step.body, preheader: step.preheader },
         tone, goal, length,
-        product: product.trim() || undefined,
+        product: (selectedService || product).trim() || undefined,
         audience: audience.trim() || undefined,
+        business_profile: profile || undefined,
+        selected_service: selectedService || product.trim(),
       };
       return apiPost<RewriteResponse>("/ai/rewrite-step", payload);
     },
     onSuccess: (r) => setPreview(r),
     onError: (e) => toast.error(errMsg(e)),
   });
-  const reset = () => { setPreview(null); setProduct(""); setAudience(""); };
+
+  const reset = () => {
+    setPreview(null); setProduct(""); setProfile(null); setSelectedService("");
+    research.reset(); rewrite.reset();
+  };
   const close = () => { reset(); onClose(); };
+  const listText = (values: string[]) => values.join("\n");
+  const setProfileField = (key: keyof Omit<WebsiteProfile, "website">, value: string) => {
+    if (!profile) return;
+    setProfile({ ...profile, [key]: key === "company_summary" ? value : value.split("\n").map((v) => v.trim()).filter(Boolean) });
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) close(); }}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl scroll-thin" data-testid="rewrite-dialog">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl scroll-thin" data-testid="rewrite-dialog">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Wand2 className="size-4 text-cyan" /> Rewrite with AI</DialogTitle>
-          <DialogDescription>Keeps every <span className="font-mono text-foreground/80">{"{{variable}}"}</span> intact. Uses Google Gemini. Configure <span className="font-mono text-foreground/80">GEMINI_API_KEY</span> in your backend environment.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2"><Wand2 className="size-4 text-cyan" /> AI Email Writer</DialogTitle>
+          <DialogDescription>Read your website, review your business facts, choose a service, and generate an email with Gemini. Template variables stay intact.</DialogDescription>
         </DialogHeader>
+
         {!preview && (
-          <div className="my-4 space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+          <div className="my-3 space-y-4">
+            <div className="rounded-lg border border-border p-3 space-y-2">
+              <div className="flex items-center gap-2 font-medium text-sm"><Globe className="size-4 text-cyan" /> Business website</div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://yourcompany.com" data-testid="rewrite-website-input" />
+                <Button onClick={() => research.mutate()} disabled={research.isPending || !website.trim()} variant="outline" className="shrink-0" data-testid="rewrite-research-website">
+                  {research.isPending ? <Loader2 className="size-4 animate-spin" /> : <Globe className="size-4" />} Read website
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Reads up to six public pages on this domain. Review the extracted details before using them.</p>
+            </div>
+
+            {profile && (
+              <div className="rounded-lg border border-border p-3 space-y-3" data-testid="rewrite-business-profile">
+                <div>
+                  <div className="font-medium text-sm">Review extracted business profile</div>
+                  <p className="text-xs text-muted-foreground mt-1">Edit or remove anything inaccurate. These details are sent to Gemini only when you generate the email.</p>
+                </div>
+                {PROFILE_FIELDS.map(({ key, label, help }) => (
+                  <div className="space-y-1.5" key={key}>
+                    <Label>{label}</Label>
+                    <Textarea
+                      value={key === "company_summary" ? profile.company_summary : listText(profile[key] as string[])}
+                      onChange={(e) => setProfileField(key, e.target.value)}
+                      placeholder={help}
+                      rows={key === "company_summary" ? 2 : 3}
+                      data-testid={`rewrite-profile-${key}`}
+                    />
+                    <p className="text-xs text-muted-foreground">{help}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label>Tone</Label>
                 <Select value={tone} onValueChange={(v) => setTone(v as RewriteTone)}>
                   <SelectTrigger data-testid="rewrite-tone-trigger"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(["professional", "casual", "friendly", "direct"] as const).map((t) => (
-                      <SelectItem key={t} value={t} data-testid={`rewrite-tone-${t}`}>{t[0].toUpperCase() + t.slice(1)}</SelectItem>
-                    ))}
-                  </SelectContent>
+                  <SelectContent>{(["professional", "casual", "friendly", "direct"] as const).map((t) => <SelectItem key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Goal</Label>
+                <Label>Email type</Label>
                 <Select value={goal} onValueChange={(v) => setGoal(v as RewriteGoal)}>
                   <SelectTrigger data-testid="rewrite-goal-trigger"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cold_intro" data-testid="rewrite-goal-cold_intro">Cold intro</SelectItem>
-                    <SelectItem value="followup" data-testid="rewrite-goal-followup">Follow-up</SelectItem>
-                    <SelectItem value="breakup" data-testid="rewrite-goal-breakup">Break-up</SelectItem>
+                    <SelectItem value="cold_intro">Cold intro</SelectItem>
+                    <SelectItem value="followup">Follow-up</SelectItem>
+                    <SelectItem value="breakup">Break-up</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -578,52 +652,54 @@ function RewriteDialog({
                 <Label>Length</Label>
                 <Select value={length} onValueChange={(v) => setLength(v as RewriteLength)}>
                   <SelectTrigger data-testid="rewrite-length-trigger"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="short" data-testid="rewrite-length-short">Short</SelectItem>
-                    <SelectItem value="medium" data-testid="rewrite-length-medium">Medium</SelectItem>
-                  </SelectContent>
+                  <SelectContent><SelectItem value="short">Short</SelectItem><SelectItem value="medium">Medium</SelectItem></SelectContent>
                 </Select>
               </div>
             </div>
+
             <div className="space-y-1.5">
-              <Label>What you're pitching <span className="text-muted-foreground">· optional</span></Label>
-              <Input value={product} onChange={(e) => setProduct(e.target.value)} maxLength={400} placeholder="e.g. a shipping-cost analytics tool for DTC Shopify brands" data-testid="rewrite-product-input" />
+              <Label>Service to promote</Label>
+              {profile?.services?.length ? (
+                <Select value={selectedService} onValueChange={setSelectedService}>
+                  <SelectTrigger data-testid="rewrite-service-select"><SelectValue placeholder="Choose a service" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__best_fit__">Recommend the best fit for this audience</SelectItem>
+                    {profile.services.map((svc, i) => <SelectItem key={`${i}-${svc}`} value={svc}>{svc}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={product} onChange={(e) => setProduct(e.target.value)} maxLength={400} placeholder="Read your website first, or enter a service manually" data-testid="rewrite-product-input" />
+              )}
+              <p className="text-xs text-muted-foreground">AI will align the service with the target audience, without inventing offers or results.</p>
             </div>
             <div className="space-y-1.5">
-              <Label>Target reader <span className="text-muted-foreground">· optional</span></Label>
-              <Input value={audience} onChange={(e) => setAudience(e.target.value)} maxLength={200} placeholder="e.g. founders doing $5M+ ARR" data-testid="rewrite-audience-input" />
+              <Label>Target audience</Label>
+              <Input value={audience} onChange={(e) => setAudience(e.target.value)} maxLength={200} placeholder="e.g. marketing agencies" data-testid="rewrite-audience-input" />
             </div>
           </div>
         )}
+
         {preview && (
           <div className="my-4 space-y-3" data-testid="rewrite-preview">
             <div className="rounded-lg border border-border bg-background p-3">
               <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Subject</Label>
               <p className="mt-1 text-sm font-medium text-foreground" data-testid="rewrite-preview-subject">{preview.subject}</p>
             </div>
-            {preview.preheader && (
-              <div className="rounded-lg border border-border bg-background p-3">
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Preheader</Label>
-                <p className="mt-1 text-xs text-foreground/90" data-testid="rewrite-preview-preheader">{preview.preheader}</p>
-              </div>
-            )}
-            <div className="rounded-lg border border-border bg-background p-3">
-              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Body</Label>
-              <pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-foreground/90" data-testid="rewrite-preview-body">{preview.body}</pre>
-            </div>
+            {preview.preheader && <div className="rounded-lg border border-border bg-background p-3"><Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Preheader</Label><p className="mt-1 text-xs text-foreground/90" data-testid="rewrite-preview-preheader">{preview.preheader}</p></div>}
+            <div className="rounded-lg border border-border bg-background p-3"><Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Body</Label><pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-foreground/90" data-testid="rewrite-preview-body">{preview.body}</pre></div>
           </div>
         )}
         <DialogFooter>
           {!preview ? (
             <>
               <Button variant="outline" onClick={close} data-testid="rewrite-cancel">Cancel</Button>
-              <Button onClick={() => rewrite.mutate()} disabled={rewrite.isPending} data-testid="rewrite-generate">
-                {rewrite.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Generate
+              <Button onClick={() => rewrite.mutate()} disabled={rewrite.isPending || research.isPending} data-testid="rewrite-generate">
+                {rewrite.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Generate email
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={() => setPreview(null)} data-testid="rewrite-tweak">Tweak settings</Button>
+              <Button variant="outline" onClick={() => setPreview(null)} data-testid="rewrite-tweak">Edit settings</Button>
               <Button onClick={() => { onApply(preview); close(); toast.success("Step updated with AI draft"); }} data-testid="rewrite-apply">Replace step</Button>
             </>
           )}
