@@ -99,6 +99,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
   const [manual, setManual] = useState(false);
   const [one, setOne] = useState<LeadIn>({ email: "", first_name: "", last_name: "", company: "", title: "", timezone: "", custom: {} });
   const [historyLead, setHistoryLead] = useState<Lead | null>(null);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const leads = useQuery({
     queryKey: ["leads", campaign.id, q, status],
@@ -125,6 +126,11 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
     onSuccess: () => { toast.success("Lead removed"); refresh(); },
     onError: (e) => toast.error(errMsg(e)),
   });
+  const bulkDel = useMutation({
+    mutationFn: (payload: { ids?: string[]; delete_all?: boolean }) => apiPost<{ ok: boolean; deleted: number }>("/campaigns/" + campaign.id + "/leads/bulk-delete", { ids: payload.ids ?? [], delete_all: payload.delete_all ?? false }),
+    onSuccess: (result) => { toast.success(result.deleted + " leads deleted"); setSelectedLeadIds([]); refresh(); },
+    onError: (e) => toast.error(errMsg(e)),
+  });
   const readFile = async (f: File) => {
     const text = await f.text();
     const parsed = toLeads(text);
@@ -143,6 +149,9 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
     if (f) void readFile(f);
   };
   const rows = leads.isError ? [] : leads.data ?? [];
+  const allVisibleSelected = rows.length > 0 && rows.every((lead) => selectedLeadIds.includes(lead.id));
+  const toggleLead = (id: string, checked: boolean) => setSelectedLeadIds((current) => checked ? (current.includes(id) ? current : [...current, id]) : current.filter((value) => value !== id));
+  const toggleVisible = (checked: boolean) => setSelectedLeadIds((current) => checked ? Array.from(new Set([...current, ...rows.map((lead) => lead.id)])) : current.filter((id) => !rows.some((lead) => lead.id === id)));
 
   return (
     <div className="space-y-5">
