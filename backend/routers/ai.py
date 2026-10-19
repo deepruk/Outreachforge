@@ -150,7 +150,16 @@ async def rewrite_step(req: RewriteRequest, _user=Depends(current_user)) -> Rewr
     if response.status_code >= 500:
         raise HTTPException(status_code=502, detail="Google's Gemini service is temporarily unavailable. Please try again.")
     if response.is_error:
-        raise HTTPException(status_code=502, detail=f"Gemini API request failed with status {response.status_code}.")
+        # Surface Google's safe, non-secret error message so model/endpoint issues
+        # can be diagnosed instead of showing only an opaque status code.
+        try:
+            google_error = response.json().get("error", {}).get("message", "")
+        except (ValueError, AttributeError):
+            google_error = ""
+        detail = f"Gemini API request failed with status {response.status_code}."
+        if google_error:
+            detail += f" Google says: {google_error[:500]}"
+        raise HTTPException(status_code=502, detail=detail)
 
     try:
         result = response.json()
