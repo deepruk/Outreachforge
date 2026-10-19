@@ -171,7 +171,10 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
       <Panel
         title={<span>Leads <span className="ml-1 font-mono text-xs text-muted-foreground">{rows.length}</span></span>}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {selectedLeadIds.length > 0 && <Button variant="destructive" size="sm" onClick={() => { if (window.confirm("Delete selected leads? This cannot be undone.")) bulkDel.mutate({ ids: selectedLeadIds }); }} disabled={bulkDel.isPending} data-testid="leads-delete-selected"><Trash2 className="size-4" /> Delete selected ({selectedLeadIds.length})</Button>}
+            <Button variant="outline" size="sm" onClick={() => { if (window.confirm("Delete ALL leads in this campaign, including filtered-out leads? This cannot be undone.")) bulkDel.mutate({ delete_all: true }); }} disabled={bulkDel.isPending || rows.length === 0} data-testid="leads-delete-all"><Trash2 className="size-4" /> Delete all</Button>
+            <div className="relative">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="h-8 w-40 pl-8 text-xs sm:w-56" data-testid="lead-search-input" />
@@ -203,6 +206,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
           <table className="w-full text-sm" data-testid="leads-table">
             <thead className="sticky top-0 bg-panel text-left text-[11px] uppercase tracking-[0.07em] text-muted-foreground">
               <tr className="border-b border-border">
+                <th className="px-3 py-2.5 font-semibold"><input type="checkbox" aria-label="Select all visible leads" data-testid="leads-select-visible" checked={allVisibleSelected} onChange={(e) => toggleVisible(e.target.checked)} className="size-4 accent-cyan-500" /></th>
                 <th className="px-5 py-2.5 font-semibold">Contact</th>
                 <th className="px-3 py-2.5 font-semibold">Company</th>
                 <th className="px-3 py-2.5 font-semibold">Status</th>
@@ -215,6 +219,9 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
             <tbody>
               {rows.map((l) => (
                 <tr key={l.id} onClick={() => setHistoryLead(l)} className="cursor-pointer border-b border-border/70 transition-colors hover:bg-foreground/[0.03]" data-testid={`lead-row-${l.id}`}>
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" aria-label={"Select " + l.email} data-testid={"lead-select-" + l.id} checked={selectedLeadIds.includes(l.id)} onChange={(e) => toggleLead(l.id, e.target.checked)} className="size-4 accent-cyan-500" />
+                  </td>
                   <td className="px-5 py-2.5">
                     <p className="font-medium text-foreground">{`${l.first_name} ${l.last_name}`.trim() || "—"}</p>
                     <p className="font-mono text-xs text-muted-foreground">{l.email}</p>
@@ -249,7 +256,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
                 </tr>
               ))}
               {leads.data && rows.length === 0 && (
-                <tr><td colSpan={7} className="px-5 py-12 text-center text-sm text-muted-foreground" data-testid="leads-empty">No leads yet — upload a CSV to get started.</td></tr>
+                <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-muted-foreground" data-testid="leads-empty">No leads yet — upload a CSV to get started.</td></tr>
               )}
             </tbody>
           </table>
