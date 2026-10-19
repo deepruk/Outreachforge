@@ -10,6 +10,7 @@ import SenderAccounts from "@/pages/SenderAccounts";
 import Analytics from "@/pages/Analytics";
 import ActivityLog from "@/pages/ActivityLog";
 import Settings from "@/pages/Settings";
+import AIWriter from "@/pages/AIWriter";
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
 export default function App() {
@@ -27,6 +28,7 @@ export default function App() {
       <Route path="/analytics" element={<Analytics />} />
       <Route path="/activity" element={<ActivityLog />} />
       <Route path="/settings" element={<Settings />} />
+      <Route path="/ai-writer" element={<AIWriter />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
