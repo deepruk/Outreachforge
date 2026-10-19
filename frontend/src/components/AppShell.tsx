@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import {
   Activity, AlertTriangle, BarChart3, BookOpen, ChevronDown, ChevronsUpDown, CornerDownLeft, Inbox, LayoutDashboard, LifeBuoy, LogOut,
-  Mail, Menu, Moon, Plus, Search, Send, Server, Settings as SettingsIcon, Sun, Upload, User as UserIcon,
+  Mail, Menu, Moon, Plus, Search, Send, Server, Settings as SettingsIcon, Sun, Upload, User as UserIcon, WandSparkles,
 } from "lucide-react";
 import { ApiError, apiGet } from "@/lib/api";
 import { endSession } from "@/lib/session";
@@ -56,6 +56,7 @@ const GROUPS = [
     title: "Outreach",
     items: [
       { to: "/campaigns", label: "Campaigns", icon: Mail, id: "campaigns" },
+      { to: "/ai-writer", label: "AI Email Writer", icon: WandSparkles, id: "ai-writer" },
       { to: "/inbox", label: "Master Inbox", icon: Inbox, id: "inbox" },
       { to: "/bounces", label: "Bounces", icon: AlertTriangle, id: "bounces" },
       { to: "/senders", label: "Sender Accounts", icon: Server, id: "senders" },
