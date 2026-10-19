@@ -2,6 +2,8 @@ import asyncio
 import re
 from typing import Optional
 
+from pydantic import BaseModel, Field
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from lib import mailer
@@ -18,6 +20,11 @@ from models.schemas import (
 )
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
+
+
+class BulkLeadDelete(BaseModel):
+    ids: list[str] = Field(default_factory=list, max_length=5000)
+    delete_all: bool = False
 RESERVED = {"email", "first_name", "last_name", "company", "title", "timezone", "unsubscribe_link"}
 
 DEFAULT_STEPS = [
@@ -423,6 +430,19 @@ async def import_leads(cid: str, body: LeadImport, user: dict = Depends(current_
         if c["status"] == "completed":
             await db.campaigns.update_one({"id": cid}, {"$set": {"status": "paused"}})
     return LeadImportResult(added=len(docs), skipped=skipped)
+
+
+@router.post("/{cid}/leads/bulk-delete")
+async def bulk_delete_leads(cid: str, req: BulkLeadDelete, user: dict = Depends(current_user)):
+    await _get(user, cid)
+    if req.delete_all:
+        result = await db.leads.delete_many({"campaign_id": cid})
+    else:
+        ids = list(dict.fromkeys(req.ids))
+        if not ids:
+            raise HTTPException(status_code=400, detail="Select at least one lead to delete.")
+        result = await db.leads.delete_many({"campaign_id": cid, "id": {"$in": ids}})
+    return {"ok": True, "deleted": result.deleted_count}
 
 
 @router.delete("/{cid}/leads/{lid}")
