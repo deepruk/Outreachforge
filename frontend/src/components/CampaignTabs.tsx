@@ -184,7 +184,6 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
             {selectedLeadIds.length > 0 && <Button variant="destructive" size="sm" onClick={() => { if (window.confirm("Delete selected leads? This cannot be undone.")) bulkDel.mutate({ ids: selectedLeadIds }); }} disabled={bulkDel.isPending} data-testid="leads-delete-selected"><Trash2 className="size-4" /> Delete selected ({selectedLeadIds.length})</Button>}
             <Button variant="outline" size="sm" onClick={() => { if (window.confirm("Delete ALL leads in this campaign, including filtered-out leads? This cannot be undone.")) bulkDel.mutate({ delete_all: true }); }} disabled={bulkDel.isPending || rows.length === 0} data-testid="leads-delete-all"><Trash2 className="size-4" /> Delete all</Button>
             <div className="relative">
-            <div className="relative">
               <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="h-8 w-40 pl-8 text-xs sm:w-56" data-testid="lead-search-input" />
             </div>
