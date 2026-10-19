@@ -100,7 +100,9 @@ def _build_prompt(req: RewriteRequest) -> str:
         parts.append(f"What we're pitching: {req.product.strip()}")
     if req.audience.strip():
         parts.append(f"Target reader: {req.audience.strip()}")
-    if req.selected_service.strip():
+    if req.selected_service.strip() == "__best_fit__":
+        parts.append("Choose the best-fit service from the reviewed business profile for this target audience. Name only a service listed in the profile.")
+    elif req.selected_service.strip():
         parts.append(f"Selected service to promote: {req.selected_service.strip()}")
     if req.business_profile:
         profile = req.business_profile
