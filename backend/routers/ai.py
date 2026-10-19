@@ -282,8 +282,6 @@ async def website_profile(req: WebsiteProfileRequest, _user=Depends(current_user
     response = await _gemini_generate(model, api_key, payload)
     if response.is_error:
         try:
-    if response.is_error:
-        try:
             detail = response.json().get("error", {}).get("message", "")
         except (ValueError, AttributeError):
             detail = ""
