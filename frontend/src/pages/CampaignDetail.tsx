@@ -62,11 +62,11 @@ function LiveBar({ campaign }: { campaign: Campaign }) {
   return (
     <div className="mb-6 grid grid-cols-2 divide-border overflow-hidden rounded-xl border border-border bg-panel lg:grid-cols-4 lg:divide-x" data-testid="campaign-live-bar">
       {items.map((it) => (
-        <div key={it.id} className="flex items-center gap-3 px-5 py-3.5" data-testid={`live-${it.id}`}>
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary"><it.icon className="size-4 text-cyan" /></span>
+        <div key={it.id} className={`flex items-center gap-3 px-5 py-3.5 ${it.id === "next" ? "bg-background/60" : ""}`} data-testid={`live-${it.id}`}>
+          <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${it.id === "next" ? "bg-emerald-500/10" : "bg-secondary"}`}><it.icon className={`size-4 ${it.id === "next" && d?.next_email_at ? "text-emerald-400" : "text-cyan"}`} /></span>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{it.label}</p>
-            <p className={`font-mono text-[15px] font-semibold ${it.tone}`} data-testid={`live-${it.id}-value`}>{it.value}</p>
+            <p className={`text-[11px] font-medium ${it.id === "next" ? "normal-case tracking-normal text-muted-foreground" : "uppercase tracking-[0.06em] text-muted-foreground"}`}>{it.label}</p>
+            <p className={`font-mono text-[15px] font-semibold ${it.id === "next" && d?.next_email_at ? "text-emerald-400" : it.tone}`} data-testid={`live-${it.id}-value`}>{it.id === "next" && d?.next_email_at && it.value !== "N/A" ? `In ${it.value}` : it.value}</p>
             {it.sub && <p className="truncate text-[11px] text-muted-foreground" data-testid={`live-${it.id}-sub`}>{it.sub}</p>}
           </div>
         </div>
