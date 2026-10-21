@@ -6,6 +6,7 @@ never persisted or returned to the browser.
 import base64
 import email
 import os
+import random
 import time
 from email.header import decode_header, make_header
 from email.utils import parseaddr
@@ -68,33 +69,56 @@ def access_token(sender: dict) -> str:
 
 def _request(method: str, path: str, sender: dict, *, bearer_token: str | None = None, **kwargs) -> requests.Response:
     token = bearer_token or access_token(sender)
-    headers = kwargs.pop("headers", {})
+    headers = dict(kwargs.pop("headers", {}) or {})
     headers["Authorization"] = f"Bearer {token}"
-    try:
-        response = requests.request(
-            method, f"{GMAIL_API}{path}", headers=headers, timeout=25, **kwargs
-        )
-    except requests.RequestException as exc:
-        raise RuntimeError("Could not reach the Gmail API") from exc
-    if response.status_code == 401:
-        raise RuntimeError("Google authorization was rejected; reconnect this Gmail account")
-    if response.status_code >= 400:
-        # Log only Google's structured error reason/message; never log tokens or raw payloads.
+    max_attempts = 5
+    for attempt in range(max_attempts):
         try:
-            payload = response.json()
-            error = payload.get("error") or {}
-            details = error.get("errors") or []
-            reason = next((str(item.get("reason")) for item in details if item.get("reason")), "")
-            message = str(error.get("message") or "")
-        except (ValueError, AttributeError):
-            reason, message = "", ""
-        parts = [f"Gmail API request failed (HTTP {response.status_code})"]
-        if reason:
-            parts.append(f"reason={reason}")
-        if message:
-            parts.append(f"message={message[:240]}")
-        raise RuntimeError("; ".join(parts))
-    return response
+            response = requests.request(
+                method, f"{GMAIL_API}{path}", headers=headers, timeout=25, **kwargs
+            )
+        except requests.RequestException as exc:
+            # Never automatically retry non-idempotent sends: a lost response could
+            # otherwise cause the same email to be sent twice.
+            if method.upper() != "GET" or attempt + 1 >= max_attempts:
+                raise RuntimeError("Could not reach the Gmail API") from exc
+            time.sleep(min(2 ** attempt + random.random(), 30))
+            continue
+
+        if response.status_code == 401:
+            raise RuntimeError("Google authorization was rejected; reconnect this Gmail account")
+        if response.status_code >= 400:
+            try:
+                payload = response.json()
+                error = payload.get("error") or {}
+                details = error.get("errors") or []
+                reason = next((str(item.get("reason")) for item in details if item.get("reason")), "")
+                message = str(error.get("message") or "")
+            except (ValueError, AttributeError):
+                reason, message = "", ""
+
+            retryable = (
+                response.status_code in (429, 500, 502, 503, 504)
+                or reason in ("rateLimitExceeded", "userRateLimitExceeded", "backendError")
+            )
+            if retryable and method.upper() == "GET" and attempt + 1 < max_attempts:
+                retry_after = response.headers.get("Retry-After", "")
+                try:
+                    delay = max(0.0, float(retry_after))
+                except (TypeError, ValueError):
+                    delay = min(2 ** attempt + random.random(), 30)
+                time.sleep(min(delay, 60))
+                continue
+
+            parts = [f"Gmail API request failed (HTTP {response.status_code})"]
+            if reason:
+                parts.append(f"reason={reason}")
+            if message:
+                parts.append(f"message={message[:240]}")
+            raise RuntimeError("; ".join(parts))
+        return response
+
+    raise RuntimeError("Gmail API request failed after retries")
 
 
 def test_connection(sender: dict) -> dict:
@@ -171,48 +195,111 @@ def _text_from_message(msg: email.message.Message) -> str:
     return text
 
 
-def fetch_new(sender: dict, last_cursor: int) -> tuple[list[dict], int]:
-    """Fetch inbox messages since the last Unix-second cursor, with pagination and a small overlap.
+def _record_from_raw(message: dict) -> dict | None:
+    raw = message.get("raw")
+    if not raw:
+        return None
+    try:
+        msg = email.message_from_bytes(
+            base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
+        )
+    except Exception:
+        return None
+    return {
+        "uid": int(message.get("internalDate", 0)) // 1000,
+        "from_email": parseaddr(msg.get("From", ""))[1].lower(),
+        "from_name": _decode_header(parseaddr(msg.get("From", ""))[0]),
+        "subject": _decode_header(msg.get("Subject")),
+        "message_id": (msg.get("Message-ID") or "").strip(),
+        "in_reply_to": (msg.get("In-Reply-To") or "").strip(),
+        "references": (msg.get("References") or "").strip(),
+        "body": _text_from_message(msg),
+    }
 
-    Gmail's `after:` search accepts Unix seconds through the API. The overlap protects
-    against delayed message indexing; duplicate messages are discarded by record_reply().
+
+def fetch_new(sender: dict, last_cursor: int) -> tuple[list[dict], int]:
+    """Fetch new Gmail inbox messages incrementally using Gmail history IDs.
+
+    The first run imports at most 100 recent inbox messages and saves a Gmail
+    history ID. Later runs fetch only messages added to the inbox since that ID.
+    The returned cursor is a Gmail history ID (not a Unix timestamp).
     """
-    # Re-scan five minutes to avoid losing messages that Gmail indexes late.
-    query = f"in:inbox after:{max(0, int(last_cursor) - 300)} -from:me" if last_cursor else "in:inbox newer_than:14d -from:me"
     token = access_token(sender)
+    stored_history_id = str(sender.get("gmail_history_id") or "").strip()
     out: list[dict] = []
-    page_token: str | None = None
-    while True:
-        params: dict = {"q": query, "maxResults": 100}
-        if page_token:
-            params["pageToken"] = page_token
-        listed = _request("GET", "/messages", sender, bearer_token=token, params=params).json()
-        for ref in listed.get("messages") or []:
+
+    def current_history_id() -> str:
+        profile = _request("GET", "/profile", sender, bearer_token=token).json()
+        value = str(profile.get("historyId") or "").strip()
+        if not value.isdigit():
+            raise RuntimeError("Gmail profile did not return a valid history ID")
+        return value
+
+    def fetch_message(message_id: str) -> None:
+        try:
             message = _request(
-                "GET", f"/messages/{ref['id']}", sender,
+                "GET", f"/messages/{message_id}", sender,
                 bearer_token=token, params={"format": "raw"}
             ).json()
-            raw = message.get("raw")
-            if not raw:
-                continue
-            try:
-                msg = email.message_from_bytes(
-                    base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
-                )
-            except Exception:
-                continue
-            out.append({
-                "uid": int(message.get("internalDate", 0)) // 1000,
-                "from_email": parseaddr(msg.get("From", ""))[1].lower(),
-                "from_name": _decode_header(parseaddr(msg.get("From", ""))[0]),
-                "subject": _decode_header(msg.get("Subject")),
-                "message_id": (msg.get("Message-ID") or "").strip(),
-                "in_reply_to": (msg.get("In-Reply-To") or "").strip(),
-                "references": (msg.get("References") or "").strip(),
-                "body": _text_from_message(msg),
-            })
-        page_token = listed.get("nextPageToken")
-        if not page_token:
-            break
-    # Cursor is Unix seconds, not a Gmail message ID. The next sync overlaps 5 minutes.
-    return out, int(time.time())
+        except RuntimeError as exc:
+            # A message may be deleted or moved out of the inbox after the history
+            # event was recorded. Skip that stale reference rather than restarting
+            # the entire bootstrap scan.
+            if "HTTP 404" in str(exc):
+                return
+            raise
+        # Only process messages currently in the inbox; sent mail and archived
+        # messages should not be interpreted as inbound replies.
+        if "INBOX" not in (message.get("labelIds") or []):
+            return
+        record = _record_from_raw(message)
+        if record:
+            out.append(record)
+
+    if stored_history_id:
+        try:
+            page_token: str | None = None
+            seen_ids: set[str] = set()
+            latest_history_id = stored_history_id
+            while True:
+                params: dict = {
+                    "startHistoryId": stored_history_id,
+                    "historyTypes": ["messageAdded"],
+                    "labelId": "INBOX",
+                    "maxResults": 100,
+                }
+                if page_token:
+                    params["pageToken"] = page_token
+                data = _request("GET", "/history", sender, bearer_token=token, params=params).json()
+                latest_history_id = str(data.get("historyId") or latest_history_id)
+                for event in data.get("history") or []:
+                    for added in event.get("messagesAdded") or []:
+                        ref = added.get("message") or {}
+                        message_id = str(ref.get("id") or "")
+                        if message_id and message_id not in seen_ids:
+                            seen_ids.add(message_id)
+                            fetch_message(message_id)
+                page_token = data.get("nextPageToken")
+                if not page_token:
+                    break
+            if not latest_history_id.isdigit():
+                latest_history_id = current_history_id()
+            return out, int(latest_history_id)
+        except RuntimeError as exc:
+            # Gmail returns 404 when a history ID has expired. Re-baseline with
+            # a bounded recent scan; all subsequent runs return to incremental sync.
+            if "HTTP 404" not in str(exc):
+                raise
+
+    # Initial sync or expired history ID: establish a baseline BEFORE listing
+    # messages. Any messages arriving during the scan will be picked up next run.
+    baseline_history_id = current_history_id()
+    params = {"q": "in:inbox newer_than:14d -from:me", "maxResults": 100}
+    listed = _request("GET", "/messages", sender, bearer_token=token, params=params).json()
+    for ref in listed.get("messages") or []:
+        message_id = str(ref.get("id") or "")
+        if message_id:
+            fetch_message(message_id)
+    # Intentionally do not walk every page on bootstrap: that can exhaust the
+    # per-user query-cost quota on a busy mailbox. New mail is captured by history.
+    return out, int(baseline_history_id)
