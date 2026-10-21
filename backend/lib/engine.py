@@ -374,6 +374,9 @@ async def sync_sender(sender: dict) -> int:
             # Only auto-classify recipients explicitly named by a delivery-status notice.
             # Addresses in quoted text are not reliable proof of a failed delivery.
             explicit_recipients = {addr.lower().strip(".,;<>") for addr in DSN_RECIPIENT_RE.findall(bounce_body)}
+            # Some providers (including Mimecast) use human-readable notices such as
+            # "Your message to address@example.com has been blocked" instead of DSN headers.
+            explicit_recipients.update(addr.lower().strip(".,;<>") for addr in BOUNCE_NARRATIVE_RE.findall(bounce_body))
             matched = []
             for addr in explicit_recipients:
                 lead = await db.leads.find_one(
