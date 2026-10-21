@@ -78,8 +78,10 @@ def _request(method: str, path: str, sender: dict, *, bearer_token: str | None =
                 method, f"{GMAIL_API}{path}", headers=headers, timeout=25, **kwargs
             )
         except requests.RequestException as exc:
-            if attempt + 1 >= max_attempts:
-                raise RuntimeError("Could not reach the Gmail API after retries") from exc
+            # Never automatically retry non-idempotent sends: a lost response could
+            # otherwise cause the same email to be sent twice.
+            if method.upper() != "GET" or attempt + 1 >= max_attempts:
+                raise RuntimeError("Could not reach the Gmail API") from exc
             time.sleep(min(2 ** attempt + random.random(), 30))
             continue
 
@@ -99,7 +101,7 @@ def _request(method: str, path: str, sender: dict, *, bearer_token: str | None =
                 response.status_code in (429, 500, 502, 503, 504)
                 or reason in ("rateLimitExceeded", "userRateLimitExceeded", "backendError")
             )
-            if retryable and attempt + 1 < max_attempts:
+            if retryable and method.upper() == "GET" and attempt + 1 < max_attempts:
                 retry_after = response.headers.get("Retry-After", "")
                 try:
                     delay = max(0.0, float(retry_after))
@@ -234,10 +236,18 @@ def fetch_new(sender: dict, last_cursor: int) -> tuple[list[dict], int]:
         return value
 
     def fetch_message(message_id: str) -> None:
-        message = _request(
-            "GET", f"/messages/{message_id}", sender,
-            bearer_token=token, params={"format": "raw"}
-        ).json()
+        try:
+            message = _request(
+                "GET", f"/messages/{message_id}", sender,
+                bearer_token=token, params={"format": "raw"}
+            ).json()
+        except RuntimeError as exc:
+            # A message may be deleted or moved out of the inbox after the history
+            # event was recorded. Skip that stale reference rather than restarting
+            # the entire bootstrap scan.
+            if "HTTP 404" in str(exc):
+                return
+            raise
         # Only process messages currently in the inbox; sent mail and archived
         # messages should not be interpreted as inbound replies.
         if "INBOX" not in (message.get("labelIds") or []):
