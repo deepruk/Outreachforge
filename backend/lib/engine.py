@@ -357,7 +357,7 @@ async def record_reply(user_id: str, lead: dict, sender_id: str, subject: str, b
     return True
 
 
-async def sync_sender(sender: dict) -> int:
+async def _sync_sender_unlocked(sender: dict) -> int:
     msgs, max_uid = await asyncio.to_thread(mailer.fetch_new, sender, int(sender.get("last_uid") or 0))
     uid = sender["user_id"]
     count = 0
@@ -454,8 +454,22 @@ async def sync_sender(sender: dict) -> int:
         reply_subject = normalized_subject if normalized_subject.lower().startswith("re:") else f"Re: {normalized_subject or lead.get('last_subject') or 'your message'}"
         if await record_reply(uid, lead, sender["id"], reply_subject, body, m["message_id"], m["from_email"], sender["email"]):
             count += 1
-    await db.senders.update_one({"id": sender["id"]}, {"$set": {"last_uid": max_uid, "last_synced_at": now()}})
+    fields = {"last_uid": max_uid, "last_synced_at": now()}
+    if sender.get("auth_type") == "google_oauth":
+        fields["gmail_history_id"] = str(max_uid)
+    await db.senders.update_one({"id": sender["id"]}, {"$set": fields})
     return count
+
+
+# Prevent manual sync and the background worker from querying the same mailbox
+# concurrently within this backend process.
+_sender_sync_locks: dict[str, asyncio.Lock] = {}
+
+
+async def sync_sender(sender: dict) -> int:
+    lock = _sender_sync_locks.setdefault(sender["id"], asyncio.Lock())
+    async with lock:
+        return await _sync_sender_unlocked(sender)
 
 
 async def sync_user(user_id: str) -> tuple[int, list[str]]:
