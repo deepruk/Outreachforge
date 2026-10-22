@@ -48,6 +48,12 @@ async def notify_hot_reply(user_id: str, thread_id: str, label: str, contact_nam
 BOUNCE_FROM = ("mailer-daemon", "postmaster")
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 DSN_RECIPIENT_RE = re.compile(r"(?im)^\s*(?:Final-Recipient|Original-Recipient|X-Failed-Recipients|Failed-Recipient)\s*:\s*(?:rfc822\s*;\s*)?([^\s;<>]+@[^\s;<>]+)")
+BOUNCE_NARRATIVE_RE = re.compile(
+    r"(?i)(?:your message to|message to|email to|delivery to|"
+    r"could not be delivered to|couldn't be delivered to|was not delivered to|"
+    r"failed to deliver to|undeliverable to|recipient address(?:\s+\S+){0,3}?)"
+    r"\s*[<\"']?([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})",
+)
 AB_MIN_SENDS = int(os.environ.get("AB_MIN_SENDS", "20"))  # per variant before a winner is picked
 UNSUB_FOOTER = "\n\n--\nNot interested? Unsubscribe here: {url}"
 
@@ -366,7 +372,7 @@ async def _sync_sender_unlocked(sender: dict) -> int:
             continue
         if any(b in m["from_email"] for b in BOUNCE_FROM) or any(
             marker in (m.get("subject") or "").lower()
-            for marker in ("undeliverable", "delivery status notification", "delivery failure", "delivery has failed", "mail delivery failed")
+            for marker in ("undeliverable", "delivery status notification", "delivery failure", "delivery has failed", "mail delivery failed", "message blocked", "message has been blocked", "could not be delivered", "couldn't be delivered", "was not delivered", "recipient address rejected", "delivery incomplete", "returned mail", "failure notice")
         ):
             # Always retain the original bounce notice, even when the recipient cannot
             # be matched confidently. This preserves evidence for manual review.
