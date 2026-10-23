@@ -349,8 +349,8 @@ async def record_reply(user_id: str, lead: dict, sender_id: str, subject: str, b
         "id": new_id(), "user_id": user_id, "thread_id": tid, "direction": "in", "from_email": from_email,
         "to_email": to_email, "subject": subject, "body": body, "at": at, "message_id": message_id, "kind": "reply",
     })
-    if label in HOT_LABELS:
-        await notify_hot_reply(user_id, tid, label, contact_name, lead.get("company", ""), snippet, lead["campaign_id"])
+    # Create an in-app notification for every new inbound reply, not only hot leads.
+    await notify_hot_reply(user_id, tid, label or "new_reply", contact_name, lead.get("company", ""), snippet, lead["campaign_id"])
     camp = await db.campaigns.find_one({"id": lead["campaign_id"]}, {"_id": 0, "stop_on_reply": 1})
     if label != "out_of_office" and (camp or {}).get("stop_on_reply", True):
         await db.leads.update_one({"id": lead["id"]}, {"$set": {"status": "replied", "next_send_at": None}})
