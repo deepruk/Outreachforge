@@ -349,10 +349,13 @@ class SyncResult(BaseModel):
 
 
 # ---------- notifications ----------
+NotificationLabel = Literal["new_reply", "interested", "meeting_booked", "not_interested", "out_of_office", "wrong_person"]
+
+
 class Notification(BaseModel):
     id: str
     thread_id: str
-    label: ThreadLabel
+    label: NotificationLabel
     contact_name: str
     company: str = ""
     snippet: str
