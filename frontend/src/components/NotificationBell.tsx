@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-const LABEL = { interested: "Interested", meeting_booked: "Meeting booked" } as Record<string, string>;
+const LABEL = { new_reply: "New reply", interested: "Interested", meeting_booked: "Meeting booked", not_interested: "Not interested", out_of_office: "Out of office", wrong_person: "Wrong person" } as Record<string, string>;
 const canDesktop = () => typeof window !== "undefined" && "Notification" in window;
 
 export default function NotificationBell() {
@@ -45,7 +45,7 @@ export default function NotificationBell() {
     qc.invalidateQueries({ queryKey: ["threads"] });
     qc.invalidateQueries({ queryKey: ["inbox-counts"] });
     for (const n of fresh.slice(0, 3)) {
-      const title = `${n.label === "meeting_booked" ? "📅 Meeting booked" : "🔥 Hot lead"}: ${n.contact_name}${n.company ? ` · ${n.company}` : ""}`;
+      const title = `${n.label === "meeting_booked" ? "📅 Meeting booked" : n.label === "interested" ? "🔥 Interested reply" : "✉️ New reply"}: ${n.contact_name}${n.company ? ` · ${n.company}` : ""}`;
       toast.success(title, {
         description: n.snippet,
         duration: 12000,
@@ -80,7 +80,7 @@ export default function NotificationBell() {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button variant="ghost" size="icon-sm" className="relative" aria-label="Hot lead alerts" data-testid="notifications-bell" />}>
+      <PopoverTrigger render={<Button variant="ghost" size="icon-sm" className="relative" aria-label="Message notifications" data-testid="notifications-bell" />}>
         {unread > 0 ? <BellRing className="size-4 text-amber-300" /> : <Bell className="size-4" />}
         {unread > 0 && (
           <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-red-500 px-1 font-mono text-[10px] font-bold text-white" data-testid="notifications-unread-count">
@@ -91,8 +91,8 @@ export default function NotificationBell() {
       <PopoverContent align="end" className="w-96 border border-border bg-panel p-0 shadow-2xl shadow-black/50" data-testid="notifications-panel">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
-            <p className="font-heading text-sm font-semibold text-foreground">Hot lead alerts</p>
-            <p className="text-[11px] text-muted-foreground">Interested & meeting-booked replies</p>
+            <p className="font-heading text-sm font-semibold text-foreground">Message notifications</p>
+            <p className="text-[11px] text-muted-foreground">New replies, interested leads & meeting bookings</p>
           </div>
           {unread > 0 && (
             <button type="button" onClick={() => readAll.mutate()} className="text-xs text-cyan hover:underline" data-testid="notifications-read-all">Mark all read</button>
@@ -103,7 +103,7 @@ export default function NotificationBell() {
             <li key={n.id}>
               <button type="button" onClick={() => openThread(n)} className={cn("flex w-full gap-3 border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-foreground/[0.03]", !n.read && "bg-blue-600/[0.06]")} data-testid={`notification-item-${n.id}`}>
                 <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-full", n.label === "meeting_booked" ? "bg-indigo-500/20 text-indigo-300" : "bg-emerald-500/20 text-emerald-300")}>
-                  {n.label === "meeting_booked" ? <CalendarCheck className="size-3.5" /> : <Flame className="size-3.5" />}
+                  {n.label === "meeting_booked" ? <CalendarCheck className="size-3.5" /> : n.label === "interested" ? <Flame className="size-3.5" /> : <Bell className="size-3.5" />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-2">
@@ -116,7 +116,7 @@ export default function NotificationBell() {
               </button>
             </li>
           ))}
-          {items.length === 0 && <li className="px-4 py-10 text-center text-sm text-muted-foreground">No hot replies yet.</li>}
+          {items.length === 0 && <li className="px-4 py-10 text-center text-sm text-muted-foreground">No new message notifications yet.</li>}
         </ul>
         <div className="flex items-center justify-between gap-2 px-4 py-2.5">
           {perm === "granted" ? (
