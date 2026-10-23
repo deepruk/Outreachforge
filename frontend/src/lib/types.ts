@@ -317,6 +317,8 @@ export interface SyncResult {
   errors: string[];
 }
 
+export type NotificationLabel = "new_reply" | ThreadLabel;
+
 export interface Notification {
   id: string;
   thread_id: string;
