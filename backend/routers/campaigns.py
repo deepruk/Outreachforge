@@ -236,6 +236,20 @@ async def campaign_live(cid: str, user: dict = Depends(current_user)):
         out.next_note = "No leads left to email"
     elif sent_today >= c.get("daily_limit", 100):
         out.next_note = "Daily campaign limit reached"
+        # Show the next scheduled sending-window start instead of N/A after today's cap.
+        tz = zone(c.get("timezone")) or zone("UTC")
+        local_now = n.astimezone(tz)
+        allowed_days = c.get("send_days")
+        allowed_days = set(range(7)) if allowed_days is None else set(allowed_days)
+        start_hour = max(0, min(23, int(c.get("send_start_hour", 0))))
+        for offset in range(0, 8):
+            day = local_now.date() + timedelta(days=offset)
+            if day.weekday() not in allowed_days:
+                continue
+            candidate = datetime.combine(day, time(start_hour, 0), tzinfo=tz)
+            if candidate > local_now:
+                out.next_email_at = candidate
+                break
     else:
         due = await db.leads.find_one({"campaign_id": cid, "status": {"$in": ["pending", "in_progress"]}},
                                       {"_id": 0}, sort=[("next_send_at", 1)])
@@ -246,6 +260,20 @@ async def campaign_live(cid: str, user: dict = Depends(current_user)):
                 free.append(s.get("next_available_at") or n)
         if not free:
             out.next_note = "All inboxes hit today's limit"
+            # Sender capacity resets daily; report the next allowed campaign window.
+            tz = zone(c.get("timezone")) or zone("UTC")
+            local_now = n.astimezone(tz)
+            allowed_days = c.get("send_days")
+            allowed_days = set(range(7)) if allowed_days is None else set(allowed_days)
+            start_hour = max(0, min(23, int(c.get("send_start_hour", 0))))
+            for offset in range(0, 8):
+                day = local_now.date() + timedelta(days=offset)
+                if day.weekday() not in allowed_days:
+                    continue
+                candidate = datetime.combine(day, time(start_hour, 0), tzinfo=tz)
+                if candidate > local_now:
+                    out.next_email_at = candidate
+                    break
         else:
             earliest = max(lead_at, min(free), n)
             if due and not in_send_window(c, due):
