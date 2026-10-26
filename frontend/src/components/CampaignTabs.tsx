@@ -421,14 +421,16 @@ const SAMPLE: Record<string, string> = {
   followup_2: "Hi {{first_name}}, should I close the loop for now?",
 };
 const TEMPLATE_VAR_RE = /\{\{\s*([a-z0-9_]+)\s*(?:\|([^}]*))?\}\}/gi;
-const makeRender = (custom: string[]) => (template: string) => {
+const makeRender = (custom: string[], leadValues: Record<string, string> = {}) => (template: string) => {
   let rendered = template;
-  // Expand a few passes so custom fields can contain standard template variables.
-  for (let pass = 0; pass < 5; pass++) {
+  // Expand custom fields first, then resolve any standard variables inside them.
+  for (let pass = 0; pass < 8; pass++) {
     const next = rendered.replace(TEMPLATE_VAR_RE, (m, k: string, fb?: string) => {
       const key = k.toLowerCase();
+      const actual = leadValues[key];
+      if (actual !== undefined && actual !== "") return actual;
       if (SAMPLE[key] !== undefined) return SAMPLE[key];
-      if (custom.includes(key)) return `[${key}]`;
+      if (custom.includes(key)) return fb !== undefined ? fb.trim() : `[${key}]`;
       return fb !== undefined ? fb.trim() : m;
     });
     if (next === rendered) break;
@@ -754,10 +756,28 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const lastSel = useRef<number | null>(null);
   const vars = [...BASE_VARS, ...campaign.custom_fields, "unsubscribe_link"];
-  const renderVars = makeRender(campaign.custom_fields);
+  const [previewLeadId, setPreviewLeadId] = useState("");
+  const previewLeads = useQuery({
+    queryKey: ["leads-preview", campaign.id],
+    queryFn: () => apiGet<Lead[]>(`/campaigns/${campaign.id}/leads?q=&status=all`),
+  });
+  const previewLead = (previewLeads.data ?? []).find((lead) => lead.id === previewLeadId) ?? previewLeads.data?.[0];
+  const previewValues = useMemo(() => {
+    const values: Record<string, string> = { ...SAMPLE };
+    if (previewLead) {
+      values.email = previewLead.email;
+      values.first_name = previewLead.first_name ?? "";
+      values.last_name = previewLead.last_name ?? "";
+      values.company = previewLead.company ?? "";
+      values.title = previewLead.title ?? "";
+      Object.entries(previewLead.custom ?? {}).forEach(([key, value]) => { values[key.toLowerCase()] = String(value ?? ""); });
+    }
+    return values;
+  }, [previewLead]);
+  const renderVars = useMemo(() => makeRender(campaign.custom_fields, previewValues), [campaign.custom_fields, previewValues]);
   const [shuffle, setShuffle] = useState(0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const render = useMemo(() => { const cache = new Map<string, string>(); return (t: string) => { if (!cache.has(t)) cache.set(t, spinText(renderVars(t))); return cache.get(t)!; }; }, [shuffle, campaign.custom_fields]);
+  const render = useMemo(() => { const cache = new Map<string, string>(); return (t: string) => { if (!cache.has(t)) cache.set(t, spinText(renderVars(t))); return cache.get(t)!; }; }, [shuffle, renderVars]);
   const dirty = JSON.stringify(steps) !== JSON.stringify(campaign.steps);
   const save = useMutation({
     mutationFn: () => apiPut<Campaign>(`/campaigns/${campaign.id}`, { steps }),
@@ -1029,7 +1049,17 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
             testId="sequence-preview"
           >
             <div className="p-5 text-sm">
-              <p className="text-xs text-muted-foreground">To: <span className="font-mono text-foreground/75">{SAMPLE.email}</span></p>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Preview using {previewLead ? "a real campaign lead" : "sample values"}</p>
+                <Select value={previewLead?.id ?? "sample"} onValueChange={(value) => setPreviewLeadId(value === "sample" ? "" : value)}>
+                  <SelectTrigger className="h-8 w-full sm:w-64" data-testid="preview-lead-select"><SelectValue placeholder="Choose a lead to preview" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sample">Sample values</SelectItem>
+                    {(previewLeads.data ?? []).map((lead) => <SelectItem key={lead.id} value={lead.id}>{`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || lead.email} · {lead.email}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs text-muted-foreground">To: <span className="font-mono text-foreground/75">{previewValues.email}</span></p>
               <p className="mt-1 font-medium text-foreground" data-testid="preview-subject">{render(previewB && cur.subject_b.trim() ? cur.subject_b : cur.subject) || `Re: ${render(firstSubject)}`}</p>
               <div className="mt-4 whitespace-pre-wrap rounded-lg border border-border bg-background p-4 leading-relaxed text-foreground/75" data-testid="preview-body">
                 {render(cur.body)}
