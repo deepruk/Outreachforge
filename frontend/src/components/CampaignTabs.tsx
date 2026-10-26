@@ -407,14 +407,35 @@ function LeadHistoryDialog({ campaign, lead, onClose }: { campaign: Campaign; le
 
 // ---------------- Sequence tab ----------------
 const BASE_VARS = ["first_name", "last_name", "company", "title"];
-const SAMPLE: Record<string, string> = { first_name: "Olivia", last_name: "Carter", company: "Northwind", title: "VP Sales", email: "olivia@northwind.com", unsubscribe_link: "https://…/unsubscribe" };
-const makeRender = (custom: string[]) => (t: string) =>
-  t.replace(/\{\{\s*([a-z0-9_]+)\s*(?:\|([^}]*))?\}\}/gi, (m, k: string, fb?: string) => {
-    const key = k.toLowerCase();
-    if (SAMPLE[key]) return SAMPLE[key];
-    if (custom.includes(key)) return `[${key}]`;
-    return fb !== undefined ? fb.trim() : m;
-  });
+// Representative values make custom fields visible in the editor preview. Nested
+// variables inside these values are expanded too (e.g. personalized -> {{first_name}}).
+const SAMPLE: Record<string, string> = {
+  first_name: "Olivia",
+  last_name: "Carter",
+  company: "Northwind",
+  title: "VP Sales",
+  email: "olivia@northwind.com",
+  unsubscribe_link: "https://…/unsubscribe",
+  personalized: "Hi {{first_name}}, I was looking at {{company}} and thought it could be worth connecting.",
+  followup_1: "Hi {{first_name}}, just following up on my note about {{company}}.",
+  followup_2: "Hi {{first_name}}, should I close the loop for now?",
+};
+const TEMPLATE_VAR_RE = /\{\{\s*([a-z0-9_]+)\s*(?:\|([^}]*))?\}\}/gi;
+const makeRender = (custom: string[]) => (template: string) => {
+  let rendered = template;
+  // Expand a few passes so custom fields can contain standard template variables.
+  for (let pass = 0; pass < 5; pass++) {
+    const next = rendered.replace(TEMPLATE_VAR_RE, (m, k: string, fb?: string) => {
+      const key = k.toLowerCase();
+      if (SAMPLE[key] !== undefined) return SAMPLE[key];
+      if (custom.includes(key)) return `[${key}]`;
+      return fb !== undefined ? fb.trim() : m;
+    });
+    if (next === rendered) break;
+    rendered = next;
+  }
+  return rendered;
+};
 const SPIN_RE = /\{([^{}]*\|[^{}]*)\}/g;
 function spinText(t: string): string {
   for (let i = 0; i < 20; i++) {
