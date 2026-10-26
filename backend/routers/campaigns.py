@@ -123,20 +123,34 @@ async def send_campaign_test_email(cid: str, body: CampaignTestEmailIn, user: di
     if sender.get("status") != "active":
         raise HTTPException(status_code=400, detail="Choose an active, real sender account to send a test email")
 
-    # Test sends have no selected campaign lead, so provide readable sample values
-    # for common custom fields rather than leaking raw tokens like [personalized].
+    # If the user selected a real campaign lead in the preview, render the test
+    # with that same lead's fields. Otherwise use safe sample values.
+    lead_doc = None
+    if body.lead_id:
+        lead_doc = await db.leads.find_one(
+            {"id": body.lead_id, "campaign_id": cid, "user_id": user["id"]}, {"_id": 0}
+        )
+        if not lead_doc:
+            raise HTTPException(status_code=400, detail="Selected preview lead was not found in this campaign. Refresh the preview and try again.")
     custom = {key: f"[{key}]" for key in (body.custom_fields or campaign.get("custom_fields") or [])}
-    custom.update({
-        "personalized": "Hi Olivia, I was looking at Northwind and thought it could be worth connecting.",
-        "followup_1": "Hi Olivia, just following up on my note about Northwind.",
-        "followup_2": "Hi Olivia, should I close the loop for now?",
-    })
+    if lead_doc:
+        custom.update({str(key).lower(): str(value or "") for key, value in (lead_doc.get("custom") or {}).items()})
+        # Support custom columns stored directly on the lead record as well.
+        for key in (body.custom_fields or campaign.get("custom_fields") or []):
+            if key in lead_doc and lead_doc[key] is not None:
+                custom[key.lower()] = str(lead_doc[key])
+    else:
+        custom.update({
+            "personalized": "Hi Olivia, I was looking at Northwind and thought it could be worth connecting.",
+            "followup_1": "Hi Olivia, just following up on my note about Northwind.",
+            "followup_2": "Hi Olivia, should I close the loop for now?",
+        })
     lead = {
         "email": str(body.to_email),
-        "first_name": "Olivia",
-        "last_name": "Carter",
-        "company": "Northwind",
-        "title": "VP Sales",
+        "first_name": (lead_doc or {}).get("first_name") or "Olivia",
+        "last_name": (lead_doc or {}).get("last_name") or "Carter",
+        "company": (lead_doc or {}).get("company") or "Northwind",
+        "title": (lead_doc or {}).get("title") or "VP Sales",
         "custom": custom,
     }
     subject = mailer.spin(mailer.render_vars(body.subject, lead))
