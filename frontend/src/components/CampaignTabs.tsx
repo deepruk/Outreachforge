@@ -833,6 +833,7 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
         include_unsubscribe: campaign.include_unsubscribe,
         plain_text_only: campaign.plain_text_only,
         custom_fields: campaign.custom_fields,
+        lead_id: previewLead?.id ?? null,
       },
     ),
     onSuccess: (result) => {
