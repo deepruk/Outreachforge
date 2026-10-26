@@ -156,6 +156,7 @@ class CampaignTestEmailIn(BaseModel):
     include_unsubscribe: bool = True
     plain_text_only: bool = False
     custom_fields: list[str] = Field(default_factory=list, max_length=100)
+    lead_id: str | None = Field(default=None, max_length=200)
 
 
 class StatTotals(BaseModel):
