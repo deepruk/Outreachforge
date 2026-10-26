@@ -123,7 +123,14 @@ async def send_campaign_test_email(cid: str, body: CampaignTestEmailIn, user: di
     if sender.get("status") != "active":
         raise HTTPException(status_code=400, detail="Choose an active, real sender account to send a test email")
 
+    # Test sends have no selected campaign lead, so provide readable sample values
+    # for common custom fields rather than leaking raw tokens like [personalized].
     custom = {key: f"[{key}]" for key in (body.custom_fields or campaign.get("custom_fields") or [])}
+    custom.update({
+        "personalized": "Hi Olivia, I was looking at Northwind and thought it could be worth connecting.",
+        "followup_1": "Hi Olivia, just following up on my note about Northwind.",
+        "followup_2": "Hi Olivia, should I close the loop for now?",
+    })
     lead = {
         "email": str(body.to_email),
         "first_name": "Olivia",
