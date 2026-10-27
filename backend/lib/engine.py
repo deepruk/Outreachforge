@@ -484,7 +484,22 @@ async def sync_user(user_id: str) -> tuple[int, list[str]]:
         try:
             total += await sync_sender(s)
         except Exception as e:  # noqa: BLE001
-            errors.append(f"{s['email']}: {str(e)[:200]}")
+            message = str(e)[:200]
+            auth_failed = s.get("auth_type") == "google_oauth" and any(
+                phrase in message.lower() for phrase in (
+                    "authorization expired", "revoked", "reconnect this gmail",
+                    "authorization was rejected", "stored google authorization is unreadable",
+                )
+            )
+            if auth_failed:
+                safe_message = "Google authorization expired or was revoked. Reconnect this Google account."
+                await db.senders.update_one(
+                    {"id": s["id"], "user_id": user_id},
+                    {"$set": {"status": "error", "last_error": safe_message}},
+                )
+                errors.append(f"{s['email']}: {safe_message}")
+            else:
+                errors.append(f"{s['email']}: {message}")
     return total, errors
 
 
@@ -493,7 +508,19 @@ async def sync_tick() -> None:
         try:
             await sync_sender(s)
         except Exception as e:  # noqa: BLE001
-            log.warning("imap sync %s: %s", s.get("email"), e)
+            message = str(e)[:200]
+            auth_failed = s.get("auth_type") == "google_oauth" and any(
+                phrase in message.lower() for phrase in (
+                    "authorization expired", "revoked", "reconnect this gmail",
+                    "authorization was rejected", "stored google authorization is unreadable",
+                )
+            )
+            if auth_failed:
+                await db.senders.update_one(
+                    {"id": s["id"]},
+                    {"$set": {"status": "error", "last_error": "Google authorization expired or was revoked. Reconnect this Google account."}},
+                )
+            log.warning("inbox sync %s: %s", s.get("email"), message)
 
 
 async def run_forever() -> None:
