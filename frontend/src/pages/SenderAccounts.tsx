@@ -443,6 +443,14 @@ export default function SenderAccounts() {
                             <MoreHorizontal className="size-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            {s.auth_type === "google_oauth" && (
+                              <DropdownMenuItem
+                                onClick={() => { window.location.assign("/api/senders/google/oauth/start"); }}
+                                data-testid={`sender-reconnect-google-${s.id}`}
+                              >
+                                <Plug className="size-4" />Reconnect Google
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem onClick={() => test.mutate(s.id)} data-testid={`sender-test-${s.id}`}><Plug className="size-4" />Test connection</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setEditing(s)} data-testid={`sender-edit-limits-${s.id}`}><SlidersHorizontal className="size-4" />Inbox settings</DropdownMenuItem>
                             {s.status !== "demo" && (s.status === "paused" ? (
