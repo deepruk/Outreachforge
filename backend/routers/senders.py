@@ -296,7 +296,24 @@ async def test_existing(sid: str, user: dict = Depends(current_user)):
     s = await _get(user, sid)
     if s["status"] == "demo":
         return ConnectionTestOut(smtp_ok=True, imap_ok=True, smtp_error="Demo account (simulated)")
-    res = await asyncio.to_thread(mailer.test_connection, s)
+    try:
+        res = await asyncio.to_thread(mailer.test_connection, s)
+    except Exception as exc:
+        message = str(exc)[:200]
+        auth_failed = s.get("auth_type") == "google_oauth" and any(
+            phrase in message.lower() for phrase in (
+                "authorization expired", "revoked", "reconnect this gmail",
+                "authorization was rejected", "stored google authorization is unreadable",
+            )
+        )
+        if auth_failed:
+            await db.senders.update_one(
+                {"id": sid, "user_id": user["id"]},
+                {"$set": {"status": "error", "last_error": "Google authorization expired or was revoked. Reconnect this Google account."}},
+            )
+            message = "Google authorization expired or was revoked. Reconnect this Google account."
+            return ConnectionTestOut(smtp_ok=False, smtp_error=message, imap_ok=False, imap_error=message)
+        raise HTTPException(status_code=502, detail=message)
     if res["smtp_ok"] and s["status"] == "error":
         await db.senders.update_one({"id": sid}, {"$set": {"status": "active", "last_error": ""}})
     return ConnectionTestOut(**res)
