@@ -19,7 +19,7 @@ const PRODUCT_MENU = [
 const RESOURCES_MENU = [
   { icon: BookOpen, title: "Setup guide", body: "Connect Gmail, Outlook & custom SMTP", href: "#faq" },
   { icon: Newspaper, title: "Cold email playbook", body: "Copy frameworks that get replies", href: "#product" },
-  { icon: LifeBuoy, title: "Support", body: "Talk to a human, not a bot", href: "mailto:support@outreachforge.io" },
+  { icon: LifeBuoy, title: "Support", body: "Talk to a human, not a bot", href: "mailto:singhdeepanshu30@gmail.com" },
 ];
 
 function NavMenu({ label, items, id }: { label: string; items: typeof PRODUCT_MENU; id: string }) {
@@ -375,7 +375,7 @@ export default function Home() {
           <div className="lg:col-span-4">
             <p className="text-sm font-medium text-primary">FAQ</p>
             <h2 className="mt-2 font-heading text-[36px] font-semibold leading-tight">Questions, answered.</h2>
-            <p className="mt-4 text-muted-foreground">Can't find what you need? <a href="mailto:support@outreachforge.io" className="text-primary hover:underline">Email our team</a>.</p>
+            <p className="mt-4 text-muted-foreground">Can't find what you need? <a href="mailto:singhdeepanshu30@gmail.com" className="text-primary hover:underline">Email our team</a>.</p>
           </div>
           <div className="divide-y divide-border rounded-xl border border-border bg-panel lg:col-span-8" data-testid="faq-list">
             {FAQ.map(([q, a], i) => (
@@ -416,7 +416,7 @@ export default function Home() {
             <div key={h as string}>
               <p className="text-sm font-semibold">{h as string}</p>
               <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">
-                {(ls as string[]).map((l) => <li key={l}><a href={l === "Pricing" ? "#pricing" : "#product"} className="transition-colors hover:text-foreground">{l}</a></li>)}
+                {(ls as string[]).map((l) => <li key={l}>{l === "Privacy" ? <Link to="/privacy" className="transition-colors hover:text-foreground">Privacy</Link> : l === "Terms" ? <Link to="/terms" className="transition-colors hover:text-foreground">Terms</Link> : <a href={l === "Pricing" ? "#pricing" : "#product"} className="transition-colors hover:text-foreground">{l}</a>}</li>)}
               </ul>
             </div>
           ))}
