@@ -81,7 +81,7 @@ export default function PrivacyPolicy() {
         </div>
         <section className="mt-10 border-t border-border pt-8">
           <h2 className="text-xl font-semibold">8. Contact</h2>
-          <p className="mt-3 leading-7 text-muted-foreground">For privacy questions or data requests, contact <a className="text-primary hover:underline" href="mailto:support@outreachforge.io">support@outreachforge.io</a>.</p>
+          <p className="mt-3 leading-7 text-muted-foreground">For privacy questions or data requests, contact <a className="text-primary hover:underline" href="mailto:singhdeepanshu30@gmail.com">singhdeepanshu30@gmail.com</a>.</p>
         </section>
         <div className="mt-12 flex gap-5 border-t border-border pt-6 text-sm">
           <Link to="/privacy" className="text-primary underline">Privacy Policy</Link>
