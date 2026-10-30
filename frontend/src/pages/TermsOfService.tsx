@@ -83,7 +83,7 @@ export default function TermsOfService() {
         </div>
         <section className="mt-10 border-t border-border pt-8">
           <h2 className="text-xl font-semibold">Contact</h2>
-          <p className="mt-3 leading-7 text-muted-foreground">Questions about these terms? Contact <a className="text-primary hover:underline" href="mailto:support@outreachforge.io">support@outreachforge.io</a>.</p>
+          <p className="mt-3 leading-7 text-muted-foreground">Questions about these terms? Contact <a className="text-primary hover:underline" href="mailto:singhdeepanshu30@gmail.com">singhdeepanshu30@gmail.com</a>.</p>
         </section>
         <div className="mt-12 flex gap-5 border-t border-border pt-6 text-sm">
           <Link to="/privacy" className="text-muted-foreground hover:text-foreground">Privacy Policy</Link>
