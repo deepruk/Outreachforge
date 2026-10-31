@@ -6,6 +6,10 @@ services:
     buildCommand: yarn install && yarn build
     staticPublishPath: dist
     routes:
+      # Serve the Google Search Console verification file directly before the SPA fallback.
+      - type: rewrite
+        source: /google9d8562626b8613ea.html
+        destination: /google9d8562626b8613ea.html
       # Keep API requests on the frontend origin so the existing session flow remains same-origin.
       - type: rewrite
         source: /api/*
