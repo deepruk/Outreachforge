@@ -51,7 +51,7 @@ function ProductMock() {
     <div className="overflow-hidden rounded-xl border border-border bg-panel shadow-2xl shadow-blue-950/20" data-testid="hero-product-mock">
       <div className="flex items-center gap-1.5 border-b border-border bg-secondary/60 px-3 py-2">
         <span className="size-2.5 rounded-full bg-red-400/80" /><span className="size-2.5 rounded-full bg-amber-400/80" /><span className="size-2.5 rounded-full bg-emerald-400/80" />
-        <span className="ml-3 rounded-md bg-background px-3 py-0.5 font-mono text-[10px] text-muted-foreground">app.outreachforge.io/dashboard</span>
+        <span className="ml-3 rounded-md bg-background px-3 py-0.5 font-mono text-[10px] text-muted-foreground">flow.rohence.com/dashboard</span>
       </div>
       <div className="grid grid-cols-12">
         <div className="col-span-3 hidden space-y-1 border-r border-border p-3 sm:block">
@@ -95,7 +95,7 @@ function ProductMock() {
 const TABS = [
   { id: "sequences", label: "Sequences", icon: Layers, title: "Write once. Personalize for thousands.", body: "Build multi-step sequences with day delays, {{variables}} from any CSV column, {Hi|Hey} spintax and A/B subject tests that pick a winner on their own.", points: ["Unlimited steps & follow-ups", "Custom fields from any CSV column", "Auto-winner A/B subject lines"],
     mock: ["Step 1 · {Hi|Hey} {{first_name}}, quick idea for {{company}}", "Wait 3 days if no reply", "Step 2 · Re: same thread bump", "Wait 4 days", "Step 3 · Break-up email"] },
-  { id: "rotation", label: "Inbox rotation", icon: Server, title: "Spread volume across every inbox you own.", body: "Connect Gmail, Outlook, Zoho or any SMTP server. OutreachForge rotates sends, respects per-inbox caps and keeps each lead on the same inbox for clean threading.", points: ["Per-inbox daily limits & warm-up ramp", "Random 10–15 min gaps between sends", "Auto-pause inboxes on SMTP errors"],
+  { id: "rotation", label: "Inbox rotation", icon: Server, title: "Spread volume across every inbox you own.", body: "Connect Gmail, Outlook, Zoho or any SMTP server. Rohence Flow rotates sends, respects per-inbox caps and keeps each lead on the same inbox for clean threading.", points: ["Per-inbox daily limits & warm-up ramp", "Random 10–15 min gaps between sends", "Auto-pause inboxes on SMTP errors"],
     mock: ["alex@getbrand.com · 38/50 today", "sam@trybrand.com · 27/40 today", "jo@brandhq.com · warm-up day 6 · 23/40", "next send in 11m 42s"] },
   { id: "inbox", label: "Master Inbox", icon: Inbox, title: "Every reply. One inbox. Zero tab-switching.", body: "IMAP sync pulls replies from all inboxes every minute, auto-labels them Interested, Meeting booked or Out of office, and lets you reply inline from the right sender.", points: ["Keyword auto-labelling", "Hot-lead desktop alerts", "Reply from the original inbox"],
     mock: ["🔥 Priya — Interested · 2m ago", "📅 Omar — Meeting booked · 14m ago", "Grace — Out of office · 1h ago", "Leo — Not interested · 3h ago"] },
@@ -104,9 +104,9 @@ const TABS = [
 ];
 
 const FAQ = [
-  ["Do I need my own email inboxes?", "Yes. OutreachForge sends through the mailboxes you own (Google Workspace, Microsoft 365, Zoho or any SMTP server) using app passwords. That keeps your reputation in your hands — no shared IP pools."],
+  ["Do I need my own email inboxes?", "Yes. Rohence Flow sends through the mailboxes you own (Google Workspace, Microsoft 365, Zoho or any SMTP server) using app passwords. That keeps your reputation in your hands — no shared IP pools."],
   ["How does open and click tracking work?", "Each email carries an invisible 1px image and links are routed through a redirect on your own domain. You can turn either off per campaign."],
-  ["Will my emails land in spam?", "Deliverability depends on your domain setup (SPF, DKIM, DMARC) and copy. OutreachForge adds the guard-rails: warm-up ramps, random gaps, random daily starts, sending calendars, spintax and one-click unsubscribe headers."],
+  ["Will my emails land in spam?", "Deliverability depends on your domain setup (SPF, DKIM, DMARC) and copy. Rohence Flow adds the guard-rails: warm-up ramps, random gaps, random daily starts, sending calendars, spintax and one-click unsubscribe headers."],
   ["How are replies detected?", "Every connected inbox is synced over IMAP about once a minute. Replies are matched to the original email by thread headers, the lead's sequence stops automatically and the reply lands in your Master Inbox."],
   ["Can I import my existing lead lists?", "Upload any CSV. Standard columns are mapped automatically and every extra column becomes a personalization variable such as {{city}} or {{pain_point}}."],
   ["Is there a limit on inboxes or seats?", "No. It's your platform — connect as many inboxes and run as many campaigns as your infrastructure allows."],
@@ -163,7 +163,7 @@ export default function Home() {
             <span className="bg-gradient-to-r from-blue-500 via-sky-400 to-emerald-400 bg-clip-text text-transparent">on infrastructure you own.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-[17px] leading-relaxed text-muted-foreground animate-fade-up" style={{ animationDelay: "120ms" }}>
-            OutreachForge runs personalized multi-step campaigns across all of your inboxes, protects deliverability with human-like pacing, and turns every reply into a pipeline — without per-seat pricing.
+            Rohence Flow runs personalized multi-step campaigns across all of your inboxes, protects deliverability with human-like pacing, and turns every reply into a pipeline — without per-seat pricing.
           </p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3 animate-fade-up" style={{ animationDelay: "180ms" }}>
             <Link to="/signup" className={cn(buttonVariants({ size: "lg" }), "h-11 px-6 text-[15px] shadow-lg shadow-blue-600/25")} data-testid="hero-get-started-button">Start sending free <ArrowRight className="size-4" /></Link>
@@ -238,7 +238,7 @@ export default function Home() {
             <div className="lg:col-span-4">
               <p className="text-sm font-medium text-primary">Deliverability</p>
               <h2 className="mt-2 font-heading text-[36px] font-semibold leading-tight">Send like a human. Land like one too.</h2>
-              <p className="mt-4 text-muted-foreground">Spam filters look for patterns. OutreachForge removes them — every inbox gets its own rhythm, every email reads a little differently.</p>
+              <p className="mt-4 text-muted-foreground">Spam filters look for patterns. Rohence Flow removes them — every inbox gets its own rhythm, every email reads a little differently.</p>
               <Link to="/signup" className={cn(buttonVariants({ variant: "outline" }), "mt-6")} data-testid="deliverability-cta">Protect my domains <ArrowRight className="size-4" /></Link>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:col-span-8">
@@ -291,7 +291,7 @@ export default function Home() {
             <table className="w-full min-w-[620px] text-sm" data-testid="compare-table">
               <thead><tr className="border-b border-border text-left text-muted-foreground">
                 <th className="px-5 py-4 font-medium">Feature</th>
-                <th className="px-5 py-4 text-center font-semibold text-foreground"><span className="rounded-full bg-primary/10 px-3 py-1 text-primary">OutreachForge</span></th>
+                <th className="px-5 py-4 text-center font-semibold text-foreground"><span className="rounded-full bg-primary/10 px-3 py-1 text-primary">Rohence Flow</span></th>
                 <th className="px-5 py-4 text-center font-medium">Instantly</th><th className="px-5 py-4 text-center font-medium">Smartlead</th>
               </tr></thead>
               <tbody>
@@ -421,7 +421,7 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <div className="border-t border-border py-6 text-center text-xs text-muted-foreground">© {new Date().getFullYear()} OutreachForge. Send responsibly — always honor opt-outs.</div>
+        <div className="border-t border-border py-6 text-center text-xs text-muted-foreground">© {new Date().getFullYear()} Rohence Flow. Send responsibly — always honor opt-outs.</div>
       </footer>
     </div>
   );
