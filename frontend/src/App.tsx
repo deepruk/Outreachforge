@@ -41,7 +41,7 @@ export default function App() {
       {pathname === "/" && (
         <footer className="border-t border-border bg-background px-5 py-6">
           <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 text-sm text-muted-foreground sm:flex-row">
-            <span>© {new Date().getFullYear()} OutreachForge</span>
+            <span>© {new Date().getFullYear()} Rohence Flow</span>
             <nav aria-label="Legal" className="flex gap-5">
               <Link to="/privacy" className="transition-colors hover:text-foreground">Privacy Policy</Link>
               <Link to="/terms" className="transition-colors hover:text-foreground">Terms of Service</Link>
