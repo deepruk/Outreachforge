@@ -26,7 +26,7 @@ export function Logo({ className, to = "/" }: { className?: string; to?: string 
         <Send className="size-4 text-white" strokeWidth={2.5} />
       </span>
       <span className="font-heading text-[17px] font-semibold tracking-tight text-foreground">
-        Outreach<span className="text-cyan">Forge</span>
+        Rohence<span className="text-cyan"> Flow</span>
       </span>
     </Link>
   );
