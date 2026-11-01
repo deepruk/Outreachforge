@@ -97,7 +97,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
             </button>
           )}
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            {isLogin ? "New to OutreachForge? " : "Already have an account? "}
+            {isLogin ? "New to Rohence Flow? " : "Already have an account? "}
             <Link to={isLogin ? "/signup" : "/login"} className="font-medium text-cyan hover:underline" data-testid="auth-switch-link">
               {isLogin ? "Create an account" : "Log in"}
             </Link>
