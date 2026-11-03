@@ -171,7 +171,7 @@ OAUTH_CONFIG = {
         "redirect_env": "GOOGLE_SHEETS_REDIRECT_URI",
         "authorize": "https://accounts.google.com/o/oauth2/v2/auth",
         "token": "https://oauth2.googleapis.com/token",
-        "scope": "openid email https://www.googleapis.com/auth/drive.file",
+        "scope": "openid email https://www.googleapis.com/auth/spreadsheets",
         "extra": {"access_type": "offline", "prompt": "consent"},
     },
     "hubspot": {
