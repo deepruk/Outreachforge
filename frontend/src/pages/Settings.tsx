@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck, KeyRound, Loader2, Mail, ShieldCheck, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import AppShell, { PageHeader } from "@/components/AppShell";
+import APIKeysPanel from "@/components/APIKeysPanel";
 import { Panel } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,7 +59,7 @@ export default function Settings() {
 
   return (
     <AppShell>
-      <PageHeader eyebrow="Workspace preferences" title="Account settings" subtitle="Manage your profile, sign-in email, and password." />
+      <PageHeader eyebrow="Workspace preferences" title="Account settings" subtitle="Manage your profile, sign-in email, password, and API access." />
       <div className="grid max-w-4xl gap-5">
         <Panel title="Profile & email" testId="settings-profile-panel">
           <form onSubmit={submitProfile} className="space-y-5 p-5 sm:p-6">
@@ -122,6 +123,8 @@ export default function Settings() {
             </div>
           </form>
         </Panel>
+
+        <APIKeysPanel />
       </div>
     </AppShell>
   );
