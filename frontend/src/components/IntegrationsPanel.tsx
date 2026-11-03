@@ -46,7 +46,6 @@ export default function IntegrationsPanel() {
   const [filter, setFilter] = useState<"all" | "configured" | "not-configured">("all");
   const [search, setSearch] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const connected = useQuery({ queryKey: ["integrations"], queryFn: () => apiGet<Integration[]>("/integrations") });
   const connect = useMutation({
     mutationFn: (provider: Provider) => apiPost<Integration>("/integrations", { provider, api_key: keys[provider]?.trim() }),
