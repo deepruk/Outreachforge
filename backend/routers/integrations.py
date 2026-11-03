@@ -13,12 +13,14 @@ from lib.db import db
 from lib.util import new_id
 
 router = APIRouter(prefix="/integrations", tags=["Integrations"])
-Provider = Literal["apollo", "neverbounce", "zerobounce"]
+Provider = Literal["apollo", "neverbounce", "zerobounce", "smartlead", "instantly"]
 
 PROVIDERS = {
     "apollo": {"name": "Apollo.io", "category": "Prospecting"},
     "neverbounce": {"name": "NeverBounce", "category": "Email verification"},
     "zerobounce": {"name": "ZeroBounce", "category": "Email verification"},
+    "smartlead": {"name": "Smartlead", "category": "Outreach"},
+    "instantly": {"name": "Instantly", "category": "Outreach"},
 }
 
 
@@ -66,6 +68,17 @@ async def _check(provider: str, api_key: str) -> tuple[bool, str]:
                     "https://api.zerobounce.net/v2/getcredits",
                     params={"api_key": api_key},
                 )
+            elif provider == "smartlead":
+                response = await client.get(
+                    "https://server.smartlead.ai/api/v1/campaigns/",
+                    params={"api_key": api_key},
+                )
+            elif provider == "instantly":
+                response = await client.get(
+                    "https://api.instantly.ai/api/v2/campaigns",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    params={"limit": 1},
+                )
             else:
                 return False, "Provider is not supported yet."
         if response.status_code == 200:
@@ -74,6 +87,10 @@ async def _check(provider: str, api_key: str) -> tuple[bool, str]:
                 return False, "NeverBounce did not accept this API key."
             if provider == "zerobounce" and "Credits" not in data and "credits" not in data:
                 return False, str(data.get("error", "ZeroBounce did not accept this API key."))[:180]
+            if provider == "smartlead" and isinstance(data, dict) and data.get("message") == "Invalid API Key":
+                return False, "Smartlead did not accept this API key."
+            if provider == "instantly" and isinstance(data, dict) and data.get("statusCode") in (401, 403):
+                return False, "Instantly rejected this API key or its permissions."
             return True, "API key verified."
         if response.status_code in (401, 403):
             return False, "Authentication failed. Check the API key and provider permissions."
