@@ -9,13 +9,15 @@ import { Label } from "@/components/ui/label";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { errMsg } from "@/lib/format";
 
-type Provider = "apollo" | "neverbounce" | "zerobounce";
+type Provider = "apollo" | "neverbounce" | "zerobounce" | "smartlead" | "instantly";
 type Integration = { id: string; provider: Provider; name: string; category: string; key_hint: string; status: string; created_at: string; last_tested_at: string | null };
 type Connector = { id: string; name: string; category: string; description: string; docs?: string; provider?: Provider; comingSoon?: boolean };
 const connectors: Connector[] = [
   { id: "apollo", provider: "apollo", name: "Apollo", category: "Prospecting", description: "Prospect discovery and enrichment", docs: "https://docs.apollo.io/" },
   { id: "neverbounce", provider: "neverbounce", name: "NeverBounce", category: "Email verification", description: "Verify email addresses before outreach", docs: "https://developers.neverbounce.com/" },
   { id: "zerobounce", provider: "zerobounce", name: "ZeroBounce", category: "Email verification", description: "Validate email addresses and protect deliverability", docs: "https://www.zerobounce.net/docs/" },
+  { id: "smartlead", provider: "smartlead", name: "Smartlead", category: "Outreach", description: "Connect campaigns and outreach activity", docs: "https://helpcenter.smartlead.ai/en/articles/125-full-api-documentation" },
+  { id: "instantly", provider: "instantly", name: "Instantly", category: "Outreach", description: "Connect campaigns, leads, and campaign analytics", docs: "https://developer.instantly.ai/" },
   { id: "airtable", name: "Airtable", category: "Database", description: "Sync and manage database records", comingSoon: true },
   { id: "anymail", name: "Anymail Finder", category: "Email finder", description: "Discover and verify professional email addresses", comingSoon: true },
   { id: "aimfox", name: "Aimfox", category: "LinkedIn automation", description: "LinkedIn automation and outreach", comingSoon: true },
@@ -32,8 +34,6 @@ const connectors: Connector[] = [
   { id: "zapier", name: "Zapier", category: "Automation", description: "Connect workflows across your tools", comingSoon: true },
   { id: "make", name: "Make", category: "Automation", description: "Build visual workflow automations", comingSoon: true },
   { id: "n8n", name: "n8n", category: "Automation", description: "Connect custom workflow automations", comingSoon: true },
-  { id: "smartlead", name: "Smartlead", category: "Outreach", description: "Connect your outbound email workflows", comingSoon: true },
-  { id: "instantly", name: "Instantly", category: "Outreach", description: "Connect outbound campaign workflows", comingSoon: true },
   { id: "hunter", name: "Hunter", category: "Email finder", description: "Find professional email addresses", comingSoon: true },
   { id: "lusha", name: "Lusha", category: "Prospecting", description: "Discover business contact information", comingSoon: true },
   { id: "rocketreach", name: "RocketReach", category: "Prospecting", description: "Find professional contact details", comingSoon: true },
@@ -45,6 +45,7 @@ export default function IntegrationsPanel() {
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<"all" | "configured" | "not-configured">("all");
   const [search, setSearch] = useState("");
+  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const connected = useQuery({ queryKey: ["integrations"], queryFn: () => apiGet<Integration[]>("/integrations") });
   const connect = useMutation({
