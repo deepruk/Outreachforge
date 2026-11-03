@@ -9,28 +9,28 @@ import { Label } from "@/components/ui/label";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { errMsg } from "@/lib/format";
 
-type Provider = "apollo" | "neverbounce" | "zerobounce" | "smartlead" | "instantly";
+type Provider = "apollo" | "neverbounce" | "zerobounce" | "smartlead" | "instantly" | "google_sheets" | "hubspot" | "calendly";
 type Integration = { id: string; provider: Provider; name: string; category: string; key_hint: string; status: string; created_at: string; last_tested_at: string | null };
-type Connector = { id: string; name: string; category: string; description: string; docs?: string; provider?: Provider; comingSoon?: boolean };
+type Connector = { id: string; name: string; category: string; description: string; docs?: string; provider?: Provider; comingSoon?: boolean; oauth?: boolean };
 const connectors: Connector[] = [
   { id: "apollo", provider: "apollo", name: "Apollo", category: "Prospecting", description: "Prospect discovery and enrichment", docs: "https://docs.apollo.io/" },
   { id: "neverbounce", provider: "neverbounce", name: "NeverBounce", category: "Email verification", description: "Verify email addresses before outreach", docs: "https://developers.neverbounce.com/" },
   { id: "zerobounce", provider: "zerobounce", name: "ZeroBounce", category: "Email verification", description: "Validate email addresses and protect deliverability", docs: "https://www.zerobounce.net/docs/" },
   { id: "smartlead", provider: "smartlead", name: "Smartlead", category: "Outreach", description: "Connect campaigns and outreach activity", docs: "https://helpcenter.smartlead.ai/en/articles/125-full-api-documentation" },
   { id: "instantly", provider: "instantly", name: "Instantly", category: "Outreach", description: "Connect campaigns, leads, and campaign analytics", docs: "https://developer.instantly.ai/" },
+  { id: "sheets", provider: "google_sheets", name: "Google Sheets", category: "Database", description: "Export Rohence Flow leads into your spreadsheets", docs: "https://developers.google.com/workspace/sheets/api", oauth: true },
+  { id: "hubspot", provider: "hubspot", name: "HubSpot", category: "CRM", description: "Sync Rohence Flow leads as CRM contacts", docs: "https://developers.hubspot.com/docs/api/crm/contacts", oauth: true },
+  { id: "calendly", provider: "calendly", name: "Calendly", category: "Scheduling", description: "Connect your account and view scheduled meetings", docs: "https://developer.calendly.com/", oauth: true },
   { id: "airtable", name: "Airtable", category: "Database", description: "Sync and manage database records", comingSoon: true },
   { id: "anymail", name: "Anymail Finder", category: "Email finder", description: "Discover and verify professional email addresses", comingSoon: true },
   { id: "aimfox", name: "Aimfox", category: "LinkedIn automation", description: "LinkedIn automation and outreach", comingSoon: true },
   { id: "attio", name: "Attio", category: "CRM", description: "Relationship management and automation", comingSoon: true },
   { id: "cal", name: "Cal.com", category: "Scheduling", description: "Meeting booking and calendar management", comingSoon: true },
-  { id: "calendly", name: "Calendly", category: "Scheduling", description: "Scheduling automation", comingSoon: true },
   { id: "close", name: "Close", category: "CRM", description: "CRM and sales workflow automation", comingSoon: true },
   { id: "clay", name: "Clay", category: "Enrichment", description: "Enrich and automate prospect research", comingSoon: true },
-  { id: "hubspot", name: "HubSpot", category: "CRM", description: "Sync contacts, companies, and deals", comingSoon: true },
   { id: "salesforce", name: "Salesforce", category: "CRM", description: "Connect your sales CRM", comingSoon: true },
   { id: "pipedrive", name: "Pipedrive", category: "CRM", description: "Sync leads and sales activities", comingSoon: true },
   { id: "slack", name: "Slack", category: "Communication", description: "Get outreach notifications", comingSoon: true },
-  { id: "sheets", name: "Google Sheets", category: "Database", description: "Send prospect data to spreadsheets", comingSoon: true },
   { id: "zapier", name: "Zapier", category: "Automation", description: "Connect workflows across your tools", comingSoon: true },
   { id: "make", name: "Make", category: "Automation", description: "Build visual workflow automations", comingSoon: true },
   { id: "n8n", name: "n8n", category: "Automation", description: "Connect custom workflow automations", comingSoon: true },
@@ -56,6 +56,21 @@ export default function IntegrationsPanel() {
     mutationFn: (provider: Provider) => apiPost<{ ok: boolean; message: string }>(`/integrations/${provider}/test`),
     onSuccess: async (result) => { await qc.invalidateQueries({ queryKey: ["integrations"] }); result.ok ? toast.success(result.message) : toast.error(result.message); },
     onError: (e) => toast.error(errMsg(e, "Connection test failed")),
+  });
+  const sheetExport = useMutation({
+    mutationFn: (spreadsheet_id: string) => apiPost<{ ok: boolean; exported: number }>("/integrations/google_sheets/export", { spreadsheet_id }),
+    onSuccess: (r) => toast.success(`Exported ${r.exported} leads to Google Sheets`),
+    onError: (e) => toast.error(errMsg(e, "Google Sheets export failed")),
+  });
+  const hubspotSync = useMutation({
+    mutationFn: () => apiPost<{ ok: boolean; synced: number; errors: number }>("/integrations/hubspot/sync"),
+    onSuccess: (r) => toast.success(`HubSpot sync: ${r.synced} contacts processed, ${r.errors} errors`),
+    onError: (e) => toast.error(errMsg(e, "HubSpot sync failed")),
+  });
+  const calendlyLoad = useMutation({
+    mutationFn: () => apiGet<{ events: Array<{ name?: string; start_time?: string; status?: string }> }>("/integrations/calendly/events"),
+    onSuccess: (r) => toast.success(`Calendly connected: ${r.events.length} scheduled events retrieved`),
+    onError: (e) => toast.error(errMsg(e, "Could not load Calendly events")),
   });
   const disconnect = useMutation({
     mutationFn: (provider: Provider) => apiDelete<{ ok: boolean }>(`/integrations/${provider}`),
@@ -105,7 +120,8 @@ export default function IntegrationsPanel() {
               </div>
               <div className="flex min-h-14 items-center justify-end gap-2 border-t border-border bg-secondary/30 px-4 py-2">
                 {connector.comingSoon ? <Button size="sm" variant="outline" disabled><Clock3 className="size-3.5" /> Coming soon</Button>
-                  : item ? <><Button size="sm" variant="outline" disabled={test.isPending} onClick={() => test.mutate(connector.provider!)}><RefreshCw className="size-3.5" /> Test</Button><Button size="sm" variant="ghost" disabled={disconnect.isPending} onClick={() => { if (window.confirm(`Disconnect ${connector.name}?`)) disconnect.mutate(connector.provider!); }}><Unplug className="size-3.5" /> Disconnect</Button></>
+                  : item ? <><Button size="sm" variant="outline" disabled={connector.provider === "google_sheets" ? sheetExport.isPending : connector.provider === "hubspot" ? hubspotSync.isPending : connector.provider === "calendly" ? calendlyLoad.isPending : test.isPending} onClick={() => { if (connector.provider === "google_sheets") { const id = window.prompt("Paste the Google Spreadsheet ID (from its URL):"); if (id?.trim()) sheetExport.mutate(id.trim()); } else if (connector.provider === "hubspot") hubspotSync.mutate(); else if (connector.provider === "calendly") calendlyLoad.mutate(); else test.mutate(connector.provider!); }}>{connector.provider === "google_sheets" ? "Export leads" : connector.provider === "hubspot" ? "Sync contacts" : connector.provider === "calendly" ? "Load meetings" : "Test"}</Button><Button size="sm" variant="ghost" disabled={disconnect.isPending} onClick={() => { if (window.confirm(`Disconnect ${connector.name}?`)) disconnect.mutate(connector.provider!); }}><Unplug className="size-3.5" /> Disconnect</Button></>
+                  : connector.oauth ? <Button size="sm" onClick={() => { window.location.href = `/api/integrations/${connector.provider}/oauth/start`; }}><Link2 className="size-3.5" /> Connect</Button>
                   : <Button size="sm" onClick={() => setSelectedProvider(connector.provider!)}><Link2 className="size-3.5" /> Connect</Button>}
               </div>
             </article>
