@@ -6,12 +6,11 @@ campaigns; campaign launch and email sending remain available only in the app.
 import hashlib
 
 from fastapi import APIRouter, HTTPException, Request
-from pymongo import ReturnDocument
 
 from lib.db import db
 from lib.engine import zone
 from lib.util import new_id, now
-from models.schemas import CampaignCreate, CampaignUpdate, CampaignOut, StatTotals
+from models.schemas import CampaignCreate, CampaignUpdate
 from lib.stats import campaign_totals, totals_from
 from routers.campaigns import DEFAULT_STEPS, _out
 
