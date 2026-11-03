@@ -4,6 +4,7 @@ import { BadgeCheck, KeyRound, Loader2, Mail, ShieldCheck, UserRound } from "luc
 import { toast } from "sonner";
 import AppShell, { PageHeader } from "@/components/AppShell";
 import APIKeysPanel from "@/components/APIKeysPanel";
+import AIProviderPanel from "@/components/AIProviderPanel";
 import { Panel } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,6 +125,7 @@ export default function Settings() {
           </form>
         </Panel>
 
+        <AIProviderPanel />
         <APIKeysPanel />
       </div>
     </AppShell>
