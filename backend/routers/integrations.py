@@ -343,24 +343,34 @@ async def sync_to_hubspot(user: dict = Depends(current_user)):
     leads = await db.leads.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     synced = 0
     errors = 0
-    for lead in leads:
-        props = {
-            "email": lead.get("email", ""), "firstname": lead.get("first_name", ""),
-            "lastname": lead.get("last_name", ""), "company": lead.get("company", ""),
-            "jobtitle": lead.get("title", ""),
-        }
-        props = {k: v for k, v in props.items() if v}
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    # HubSpot supports batch upsert by email, preventing duplicate contacts on repeat syncs.
+    for offset in range(0, len(leads), 100):
+        inputs = []
+        for lead in leads[offset:offset + 100]:
+            email = str(lead.get("email") or "").strip().lower()
+            if not email:
+                errors += 1
+                continue
+            props = {
+                "email": email, "firstname": lead.get("first_name", ""),
+                "lastname": lead.get("last_name", ""), "company": lead.get("company", ""),
+                "jobtitle": lead.get("title", ""),
+            }
+            inputs.append({"id": email, "idProperty": "email", "properties": props})
+        if not inputs:
+            continue
         try:
             response = await asyncio.to_thread(
-                requests.post, "https://api.hubapi.com/crm/v3/objects/contacts",
-                headers={"Authorization": f"Bearer {token}"}, json={"properties": props}, timeout=20,
+                requests.post, "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
+                headers=headers, json={"inputs": inputs}, timeout=30,
             )
-            if response.status_code in (200, 201, 409):
-                synced += 1
+            if response.status_code in (200, 201):
+                synced += len(inputs)
             else:
-                errors += 1
+                errors += len(inputs)
         except requests.RequestException:
-            errors += 1
+            errors += len(inputs)
     return {"ok": errors == 0, "synced": synced, "errors": errors}
 
 
