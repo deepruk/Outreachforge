@@ -10,6 +10,7 @@ import SenderAccounts from "@/pages/SenderAccounts";
 import Analytics from "@/pages/Analytics";
 import ActivityLog from "@/pages/ActivityLog";
 import Settings from "@/pages/Settings";
+import Connectors from "@/pages/Connectors";
 import AIWriter from "@/pages/AIWriter";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import TermsOfService from "@/pages/TermsOfService";
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/activity" element={<ActivityLog />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/connectors" element={<Connectors />} />
         <Route path="/ai-writer" element={<AIWriter />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
