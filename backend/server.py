@@ -13,7 +13,7 @@ load_dotenv(ROOT_DIR / '.env')
 
 from lib.db import client, ensure_indexes  # noqa: E402
 from lib.engine import run_forever  # noqa: E402
-from routers import activity, ai, analytics, api_keys, auth, campaigns, inbox, integrations, notifications, public_api, senders  # noqa: E402
+from routers import activity, ai, ai_provider, analytics, api_keys, auth, campaigns, inbox, integrations, notifications, public_api, senders  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
