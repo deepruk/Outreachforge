@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     client.close()
 
 
-app = FastAPI(lifespan=lifespan, title="OutreachForge API")
+app = FastAPI(lifespan=lifespan, title="Rohence Flow API", docs_url="/api/docs", openapi_url="/api/openapi.json")
 api_router = APIRouter(prefix="/api")
 
 
