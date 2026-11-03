@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Clock3, Link2, PlugZap, RefreshCw, Search, ShieldCheck, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
@@ -44,10 +45,11 @@ export default function IntegrationsPanel() {
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<"all" | "configured" | "not-configured">("all");
   const [search, setSearch] = useState("");
+  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const connected = useQuery({ queryKey: ["integrations"], queryFn: () => apiGet<Integration[]>("/integrations") });
   const connect = useMutation({
     mutationFn: (provider: Provider) => apiPost<Integration>("/integrations", { provider, api_key: keys[provider]?.trim() }),
-    onSuccess: async (_, provider) => { setKeys((old) => ({ ...old, [provider]: "" })); await qc.invalidateQueries({ queryKey: ["integrations"] }); toast.success("Connector connected"); },
+    onSuccess: async (_, provider) => { setKeys((old) => ({ ...old, [provider]: "" })); setSelectedProvider(null); await qc.invalidateQueries({ queryKey: ["integrations"] }); toast.success("Connector connected"); },
     onError: (e) => toast.error(errMsg(e, "Could not connect this tool")),
   });
   const test = useMutation({
@@ -80,7 +82,7 @@ export default function IntegrationsPanel() {
         </div>
         <div className="relative w-full lg:max-w-sm">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by tool name..." className="pl-9" />
+          <Input type="search" name="connector-search" autoComplete="off" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by tool name..." className="pl-9" />
         </div>
       </div>
       {connected.isError && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{errMsg(connected.error, "Could not load connectors")}</p>}
@@ -99,19 +101,39 @@ export default function IntegrationsPanel() {
                     : <span className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-[10px] font-medium uppercase text-amber-600">Not connected</span>}
                 </div>
                 {connector.docs && <a href={connector.docs} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs text-primary hover:underline">API documentation</a>}
-                {connector.provider && !item && <div className="mt-3 space-y-1.5"><Label htmlFor={`connector-${connector.id}`} className="text-xs">API key</Label><Input id={`connector-${connector.id}`} type="password" autoComplete="off" value={keys[connector.provider] ?? ""} onChange={(e) => setKeys((old) => ({ ...old, [connector.provider!]: e.target.value }))} placeholder="Paste API key" className="h-9 text-xs" /></div>}
                 {item && <p className="mt-3 truncate font-mono text-[11px] text-muted-foreground">{item.key_hint}</p>}
               </div>
               <div className="flex min-h-14 items-center justify-end gap-2 border-t border-border bg-secondary/30 px-4 py-2">
                 {connector.comingSoon ? <Button size="sm" variant="outline" disabled><Clock3 className="size-3.5" /> Coming soon</Button>
                   : item ? <><Button size="sm" variant="outline" disabled={test.isPending} onClick={() => test.mutate(connector.provider!)}><RefreshCw className="size-3.5" /> Test</Button><Button size="sm" variant="ghost" disabled={disconnect.isPending} onClick={() => { if (window.confirm(`Disconnect ${connector.name}?`)) disconnect.mutate(connector.provider!); }}><Unplug className="size-3.5" /> Disconnect</Button></>
-                  : <Button size="sm" disabled={connect.isPending || !(keys[connector.provider!] ?? "").trim()} onClick={() => connect.mutate(connector.provider!)}><Link2 className="size-3.5" /> Connect</Button>}
+                  : <Button size="sm" onClick={() => setSelectedProvider(connector.provider!)}><Link2 className="size-3.5" /> Connect</Button>}
               </div>
             </article>
           );
         })}
       </div>
       {filtered.length === 0 && <div className="rounded-xl border border-dashed border-border py-14 text-center text-sm text-muted-foreground">No connectors match your search.</div>}
+
+      <Dialog open={!!selectedProvider} onOpenChange={(open) => { if (!open) setSelectedProvider(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-xl border border-border bg-secondary text-primary"><PlugZap className="size-6" /></div>
+            <DialogTitle className="text-center text-lg">Connect your {connectors.find((c) => c.provider === selectedProvider)?.name} account</DialogTitle>
+            <DialogDescription className="text-center">Enter your API key to securely connect this tool to Rohence Flow. Your key will be encrypted before it is stored.</DialogDescription>
+          </DialogHeader>
+          {selectedProvider && <form onSubmit={(e) => { e.preventDefault(); if ((keys[selectedProvider] ?? "").trim()) connect.mutate(selectedProvider); }} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="connector-api-key">{connectors.find((c) => c.provider === selectedProvider)?.name} API Key</Label>
+              <Input id="connector-api-key" name="connector-api-key" type="password" autoComplete="new-password" autoFocus value={keys[selectedProvider] ?? ""} onChange={(e) => setKeys((old) => ({ ...old, [selectedProvider]: e.target.value }))} placeholder="Enter your API key" required />
+              <p className="text-xs text-muted-foreground">You can find this key in your provider account's developer or API settings.</p>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setSelectedProvider(null)}>Cancel</Button>
+              <Button type="submit" disabled={connect.isPending || !(keys[selectedProvider] ?? "").trim()}>{connect.isPending ? "Connecting..." : "Connect"}</Button>
+            </DialogFooter>
+          </form>}
+        </DialogContent>
+      </Dialog>
       <div className="flex items-start gap-3 rounded-xl border border-border bg-secondary/20 p-4">
         <ShieldCheck className="mt-0.5 size-5 shrink-0 text-emerald-500" />
         <div><p className="text-sm font-medium text-foreground">Your accounts, your API keys</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Connected credentials are encrypted before storage. Each workspace uses its own provider account and credits. Rohence Flow never displays your full API keys again.</p></div>
