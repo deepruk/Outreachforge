@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import {
   Activity, AlertTriangle, BarChart3, BookOpen, ChevronDown, ChevronsUpDown, CornerDownLeft, Inbox, LayoutDashboard, LifeBuoy, LogOut,
-  Mail, Menu, Moon, Plus, Search, Send, Server, Settings as SettingsIcon, Sun, Upload, User as UserIcon, WandSparkles,
+  Mail, Menu, Moon, Plus, PlugZap, Search, Send, Server, Settings as SettingsIcon, Sun, Upload, User as UserIcon, WandSparkles,
 } from "lucide-react";
 import { ApiError, apiGet } from "@/lib/api";
 import { endSession } from "@/lib/session";
@@ -61,6 +61,10 @@ const GROUPS = [
       { to: "/bounces", label: "Bounces", icon: AlertTriangle, id: "bounces" },
       { to: "/senders", label: "Sender Accounts", icon: Server, id: "senders" },
     ],
+  },
+  {
+    title: "Workspace",
+    items: [{ to: "/connectors", label: "Connectors", icon: PlugZap, id: "connectors" }],
   },
   {
     title: "Insights",
