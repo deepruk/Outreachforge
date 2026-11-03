@@ -37,7 +37,7 @@ async def root():
     return {"message": "OutreachForge API", "ok": True}
 
 
-for r in (auth.router, api_keys.router, senders.router, campaigns.router, inbox.router, analytics.router, notifications.router, activity.router, ai.router, public_api.router, integrations.router):
+for r in (auth.router, api_keys.router, senders.router, campaigns.router, inbox.router, analytics.router, notifications.router, activity.router, ai.router, ai_provider.router, public_api.router, integrations.router):
     api_router.include_router(r)
 
 app.add_middleware(
