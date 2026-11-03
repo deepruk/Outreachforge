@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleHelp, Link2, Loader2, PlugZap, RefreshCw, ShieldCheck, Unplug } from "lucide-react";
+import { Check, Clock3, Link2, PlugZap, RefreshCw, Search, ShieldCheck, Unplug } from "lucide-react";
 import { toast } from "sonner";
-import { Panel } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,21 +10,45 @@ import { errMsg } from "@/lib/format";
 
 type Provider = "apollo" | "neverbounce" | "zerobounce";
 type Integration = { id: string; provider: Provider; name: string; category: string; key_hint: string; status: string; created_at: string; last_tested_at: string | null };
-const providers: { id: Provider; name: string; category: string; description: string; docs: string }[] = [
-  { id: "apollo", name: "Apollo.io", category: "Prospecting", description: "Connect your Apollo account to use your own API access for prospecting workflows.", docs: "https://docs.apollo.io/" },
-  { id: "neverbounce", name: "NeverBounce", category: "Email verification", description: "Verify email addresses with your own NeverBounce account.", docs: "https://developers.neverbounce.com/" },
-  { id: "zerobounce", name: "ZeroBounce", category: "Email verification", description: "Validate prospect email addresses using your ZeroBounce credits.", docs: "https://www.zerobounce.net/docs/" },
+type Connector = { id: string; name: string; category: string; description: string; docs?: string; provider?: Provider; comingSoon?: boolean };
+const connectors: Connector[] = [
+  { id: "apollo", provider: "apollo", name: "Apollo", category: "Prospecting", description: "Prospect discovery and enrichment", docs: "https://docs.apollo.io/" },
+  { id: "neverbounce", provider: "neverbounce", name: "NeverBounce", category: "Email verification", description: "Verify email addresses before outreach", docs: "https://developers.neverbounce.com/" },
+  { id: "zerobounce", provider: "zerobounce", name: "ZeroBounce", category: "Email verification", description: "Validate email addresses and protect deliverability", docs: "https://www.zerobounce.net/docs/" },
+  { id: "airtable", name: "Airtable", category: "Database", description: "Sync and manage database records", comingSoon: true },
+  { id: "anymail", name: "Anymail Finder", category: "Email finder", description: "Discover and verify professional email addresses", comingSoon: true },
+  { id: "aimfox", name: "Aimfox", category: "LinkedIn automation", description: "LinkedIn automation and outreach", comingSoon: true },
+  { id: "attio", name: "Attio", category: "CRM", description: "Relationship management and automation", comingSoon: true },
+  { id: "cal", name: "Cal.com", category: "Scheduling", description: "Meeting booking and calendar management", comingSoon: true },
+  { id: "calendly", name: "Calendly", category: "Scheduling", description: "Scheduling automation", comingSoon: true },
+  { id: "close", name: "Close", category: "CRM", description: "CRM and sales workflow automation", comingSoon: true },
+  { id: "clay", name: "Clay", category: "Enrichment", description: "Enrich and automate prospect research", comingSoon: true },
+  { id: "hubspot", name: "HubSpot", category: "CRM", description: "Sync contacts, companies, and deals", comingSoon: true },
+  { id: "salesforce", name: "Salesforce", category: "CRM", description: "Connect your sales CRM", comingSoon: true },
+  { id: "pipedrive", name: "Pipedrive", category: "CRM", description: "Sync leads and sales activities", comingSoon: true },
+  { id: "slack", name: "Slack", category: "Communication", description: "Get outreach notifications", comingSoon: true },
+  { id: "sheets", name: "Google Sheets", category: "Database", description: "Send prospect data to spreadsheets", comingSoon: true },
+  { id: "zapier", name: "Zapier", category: "Automation", description: "Connect workflows across your tools", comingSoon: true },
+  { id: "make", name: "Make", category: "Automation", description: "Build visual workflow automations", comingSoon: true },
+  { id: "n8n", name: "n8n", category: "Automation", description: "Connect custom workflow automations", comingSoon: true },
+  { id: "smartlead", name: "Smartlead", category: "Outreach", description: "Connect your outbound email workflows", comingSoon: true },
+  { id: "instantly", name: "Instantly", category: "Outreach", description: "Connect outbound campaign workflows", comingSoon: true },
+  { id: "hunter", name: "Hunter", category: "Email finder", description: "Find professional email addresses", comingSoon: true },
+  { id: "lusha", name: "Lusha", category: "Prospecting", description: "Discover business contact information", comingSoon: true },
+  { id: "rocketreach", name: "RocketReach", category: "Prospecting", description: "Find professional contact details", comingSoon: true },
+  { id: "zoominfo", name: "ZoomInfo", category: "Prospecting", description: "B2B company and contact intelligence", comingSoon: true },
 ];
-const comingSoon = ["ZoomInfo", "Clay", "Lusha", "RocketReach", "Hunter", "Bouncer", "HubSpot", "Salesforce", "Pipedrive", "Slack", "Google Sheets", "Zapier", "Make", "n8n", "Calendly", "Smartlead", "Instantly"];
 
 export default function IntegrationsPanel() {
   const qc = useQueryClient();
   const [keys, setKeys] = useState<Record<string, string>>({});
+  const [filter, setFilter] = useState<"all" | "configured" | "not-configured">("all");
+  const [search, setSearch] = useState("");
   const connected = useQuery({ queryKey: ["integrations"], queryFn: () => apiGet<Integration[]>("/integrations") });
   const connect = useMutation({
     mutationFn: (provider: Provider) => apiPost<Integration>("/integrations", { provider, api_key: keys[provider]?.trim() }),
-    onSuccess: async (_, provider) => { setKeys((old) => ({ ...old, [provider]: "" })); await qc.invalidateQueries({ queryKey: ["integrations"] }); toast.success("Integration connected"); },
-    onError: (e) => toast.error(errMsg(e, "Could not save integration")),
+    onSuccess: async (_, provider) => { setKeys((old) => ({ ...old, [provider]: "" })); await qc.invalidateQueries({ queryKey: ["integrations"] }); toast.success("Connector connected"); },
+    onError: (e) => toast.error(errMsg(e, "Could not connect this tool")),
   });
   const test = useMutation({
     mutationFn: (provider: Provider) => apiPost<{ ok: boolean; message: string }>(`/integrations/${provider}/test`),
@@ -34,33 +57,65 @@ export default function IntegrationsPanel() {
   });
   const disconnect = useMutation({
     mutationFn: (provider: Provider) => apiDelete<{ ok: boolean }>(`/integrations/${provider}`),
-    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["integrations"] }); toast.success("Integration disconnected"); },
-    onError: (e) => toast.error(errMsg(e, "Could not disconnect integration")),
+    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["integrations"] }); toast.success("Connector disconnected"); },
+    onError: (e) => toast.error(errMsg(e, "Could not disconnect this tool")),
   });
   const byProvider = new Map((connected.data ?? []).map((item) => [item.provider, item]));
+  const configuredCount = connectors.filter((c) => c.provider && byProvider.has(c.provider)).length;
+  const filtered = useMemo(() => connectors.filter((c) => {
+    const isConfigured = !!c.provider && byProvider.has(c.provider);
+    const matchesFilter = filter === "all" || (filter === "configured" ? isConfigured : !isConfigured);
+    const q = search.trim().toLowerCase();
+    return matchesFilter && (!q || [c.name, c.category, c.description].some((v) => v.toLowerCase().includes(q)));
+  }), [filter, search, connected.data]);
   return (
-    <Panel title={<span className="flex items-center gap-2"><PlugZap className="size-4 text-primary" /> Integrations</span>} testId="settings-integrations-panel">
-      <div className="space-y-5 p-5 sm:p-6">
-        <div className="flex items-start gap-3 rounded-xl border border-border bg-background/50 p-4">
-          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-emerald-400" />
-          <div><p className="text-sm font-medium text-foreground">Bring your own API keys</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Each workspace connects its own provider account. Credentials are encrypted before storage and never displayed again. Rohence Flow does not share API credits between customers.</p></div>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-6 border-b border-border lg:border-0">
+          {([["all", "All"], ["configured", "Configured"], ["not-configured", "Not Configured"]] as const).map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setFilter(id)} className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${filter === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+              {label}{id === "all" ? ` (${connectors.length})` : id === "configured" ? ` (${configuredCount})` : ` (${connectors.length - configuredCount})`}
+            </button>
+          ))}
         </div>
-        {connected.isError && <p role="alert" className="text-sm text-red-300">{errMsg(connected.error, "Could not load integrations")}</p>}
-        <div className="grid gap-4">
-          {providers.map((provider) => {
-            const item = byProvider.get(provider.id);
-            return <div key={provider.id} className="rounded-xl border border-border p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-medium text-foreground">{provider.name}</h3><span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">{provider.category}</span>{item && <span className="inline-flex items-center gap-1 text-xs text-emerald-400"><Check className="size-3.5" /> Connected</span>}</div><p className="mt-1 text-xs text-muted-foreground">{provider.description}</p><a className="mt-2 inline-block text-xs text-primary underline underline-offset-2" href={provider.docs} target="_blank" rel="noreferrer">API documentation</a></div>
-                {item && <span className="font-mono text-xs text-muted-foreground">{item.key_hint}</span>}
-              </div>
-              {item ? <div className="mt-4 flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={test.isPending} onClick={() => test.mutate(provider.id)}><RefreshCw className="size-3.5" /> Test connection</Button><Button size="sm" variant="ghost" disabled={disconnect.isPending} onClick={() => { if (window.confirm(`Disconnect ${provider.name}?`)) disconnect.mutate(provider.id); }}><Unplug className="size-3.5" /> Disconnect</Button></div>
-              : <div className="mt-4 space-y-2"><Label htmlFor={`integration-${provider.id}`}>API key</Label><div className="flex flex-col gap-2 sm:flex-row"><Input id={`integration-${provider.id}`} type="password" autoComplete="off" value={keys[provider.id] ?? ""} onChange={(e) => setKeys((old) => ({ ...old, [provider.id]: e.target.value }))} placeholder={`Paste your ${provider.name} API key`} /><Button size="sm" disabled={connect.isPending || !(keys[provider.id] ?? "").trim()} onClick={() => connect.mutate(provider.id)}><Link2 className="size-3.5" /> Connect</Button></div></div>}
-            </div>;
-          })}
+        <div className="relative w-full lg:max-w-sm">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by tool name..." className="pl-9" />
         </div>
-        <div><h3 className="mb-2 text-sm font-medium text-foreground">More integrations planned</h3><div className="flex flex-wrap gap-2">{comingSoon.map((name) => <span key={name} className="rounded-md border border-border bg-background/40 px-2.5 py-1 text-xs text-muted-foreground">{name}</span>)}</div><p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><CircleHelp className="size-3.5" /> These are planned integrations, not active connections yet.</p></div>
       </div>
-    </Panel>
+      {connected.isError && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{errMsg(connected.error, "Could not load connectors")}</p>}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        {filtered.map((connector) => {
+          const item = connector.provider ? byProvider.get(connector.provider) : undefined;
+          return (
+            <article key={connector.id} className="flex min-h-[245px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+              <div className="flex-1 p-4">
+                <div className="mb-4 flex size-11 items-center justify-center rounded-xl border border-border bg-background text-primary"><PlugZap className="size-5" /></div>
+                <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-foreground">{connector.name}</h2><span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">{connector.category}</span></div>
+                <p className="mt-2 min-h-10 text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
+                <div className="mt-3">
+                  {connector.comingSoon ? <span className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/60 px-2 py-1 text-[10px] font-medium uppercase text-muted-foreground"><Clock3 className="size-3" /> Coming soon</span>
+                    : item ? <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium uppercase text-emerald-500"><Check className="size-3" /> Connected</span>
+                    : <span className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-[10px] font-medium uppercase text-amber-600">Not connected</span>}
+                </div>
+                {connector.docs && <a href={connector.docs} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs text-primary hover:underline">API documentation</a>}
+                {connector.provider && !item && <div className="mt-3 space-y-1.5"><Label htmlFor={`connector-${connector.id}`} className="text-xs">API key</Label><Input id={`connector-${connector.id}`} type="password" autoComplete="off" value={keys[connector.provider] ?? ""} onChange={(e) => setKeys((old) => ({ ...old, [connector.provider!]: e.target.value }))} placeholder="Paste API key" className="h-9 text-xs" /></div>}
+                {item && <p className="mt-3 truncate font-mono text-[11px] text-muted-foreground">{item.key_hint}</p>}
+              </div>
+              <div className="flex min-h-14 items-center justify-end gap-2 border-t border-border bg-secondary/30 px-4 py-2">
+                {connector.comingSoon ? <Button size="sm" variant="outline" disabled><Clock3 className="size-3.5" /> Coming soon</Button>
+                  : item ? <><Button size="sm" variant="outline" disabled={test.isPending} onClick={() => test.mutate(connector.provider!)}><RefreshCw className="size-3.5" /> Test</Button><Button size="sm" variant="ghost" disabled={disconnect.isPending} onClick={() => { if (window.confirm(`Disconnect ${connector.name}?`)) disconnect.mutate(connector.provider!); }}><Unplug className="size-3.5" /> Disconnect</Button></>
+                  : <Button size="sm" disabled={connect.isPending || !(keys[connector.provider!] ?? "").trim()} onClick={() => connect.mutate(connector.provider!)}><Link2 className="size-3.5" /> Connect</Button>}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {filtered.length === 0 && <div className="rounded-xl border border-dashed border-border py-14 text-center text-sm text-muted-foreground">No connectors match your search.</div>}
+      <div className="flex items-start gap-3 rounded-xl border border-border bg-secondary/20 p-4">
+        <ShieldCheck className="mt-0.5 size-5 shrink-0 text-emerald-500" />
+        <div><p className="text-sm font-medium text-foreground">Your accounts, your API keys</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Connected credentials are encrypted before storage. Each workspace uses its own provider account and credits. Rohence Flow never displays your full API keys again.</p></div>
+      </div>
+    </div>
   );
 }
