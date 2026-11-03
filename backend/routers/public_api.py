@@ -142,3 +142,112 @@ async def update_campaign(campaign_id: str, body: CampaignUpdate, request: Reque
     fresh = await _get_campaign(user, campaign_id)
     totals = (await campaign_totals(user["id"], [campaign_id]))[campaign_id]
     return _out(fresh, totals).model_dump(mode="json")
+
+
+# ----- Leads: external imports are accepted only for draft campaigns -----
+from models.schemas import LeadImport, LeadImportResult, LeadOut, SenderOut
+from routers.senders import _out as sender_out
+from pydantic import BaseModel, Field
+from typing import Literal
+
+
+class ExternalSenderUpdate(BaseModel):
+    """Safe sender metadata only. SMTP/IMAP credentials are never writable/readable here."""
+    from_name: str | None = Field(default=None, max_length=200)
+    daily_limit: int | None = Field(default=None, ge=1, le=2000)
+    status: Literal["active", "paused"] | None = None
+    signatures: list[str] | None = Field(default=None, max_length=5)
+
+
+@router.get("/campaigns/{campaign_id}/leads")
+async def list_campaign_leads(campaign_id: str, request: Request, limit: int = 500):
+    """List leads for a campaign. Maximum 5,000 rows."""
+    user = await _api_user(request, "campaigns:read")
+    await _get_campaign(user, campaign_id)
+    limit = max(1, min(limit, 5000))
+    docs = await db.leads.find(
+        {"campaign_id": campaign_id, "user_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(limit)
+    return [LeadOut(**{k: v for k, v in doc.items() if k in LeadOut.model_fields}).model_dump(mode="json") for doc in docs]
+
+
+@router.post("/campaigns/{campaign_id}/leads", status_code=201)
+async def import_campaign_leads(campaign_id: str, body: LeadImport, request: Request):
+    """Import/dedupe leads and respect workspace unsubscribes. Draft campaigns only."""
+    user = await _api_user(request, "campaigns:write")
+    campaign = await _get_campaign(user, campaign_id)
+    if campaign.get("status") != "draft":
+        raise HTTPException(status_code=409, detail="Leads can only be imported through the external API into draft campaigns")
+    if len(body.leads) > 10000:
+        raise HTTPException(status_code=422, detail="A maximum of 10,000 leads can be imported per request")
+    existing = set(await db.leads.distinct("email", {"campaign_id": campaign_id}))
+    emails = [lead.email.lower() for lead in body.leads]
+    blocked = set(await db.unsubscribes.distinct(
+        "email", {"user_id": user["id"], "email": {"$in": emails}}
+    ))
+    docs, skipped, fields = [], 0, set()
+    for lead in body.leads:
+        email = lead.email.lower()
+        if email in existing:
+            skipped += 1
+            continue
+        existing.add(email)
+        custom = {str(k).strip().lower(): str(v).strip() for k, v in lead.custom.items()}
+        custom = {k: v for k, v in custom.items() if k and k not in {"email", "first_name", "last_name", "company", "title", "timezone", "unsubscribe_link"}}
+        fields.update(custom)
+        docs.append({
+            "id": new_id(), "user_id": user["id"], "campaign_id": campaign_id,
+            "email": email, "first_name": lead.first_name.strip(),
+            "last_name": lead.last_name.strip(), "company": lead.company.strip(),
+            "title": lead.title.strip(), "custom": custom,
+            "timezone": lead.timezone.strip() if zone(lead.timezone.strip()) else "",
+            "status": "unsubscribed" if email in blocked else "pending",
+            "current_step": 0, "sender_id": None, "next_send_at": None,
+            "last_sent_at": None, "created_at": now(),
+        })
+    if fields:
+        await db.campaigns.update_one(
+            {"id": campaign_id, "user_id": user["id"]},
+            {"$addToSet": {"custom_fields": {"$each": sorted(fields)} }},
+        )
+    if docs:
+        await db.leads.insert_many(docs)
+    return LeadImportResult(added=len(docs), skipped=skipped).model_dump(mode="json")
+
+
+# ----- Sender accounts: safe metadata only; mailbox secrets stay in the app -----
+@router.get("/senders")
+async def list_sender_accounts(request: Request):
+    """List connected sender accounts without exposing SMTP/IMAP or OAuth secrets."""
+    user = await _api_user(request, "campaigns:read")
+    docs = await db.senders.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    result = []
+    for doc in docs:
+        item = await sender_out(doc)
+        result.append(item.model_dump(mode="json"))
+    return result
+
+
+@router.patch("/senders/{sender_id}")
+async def update_sender_account(sender_id: str, body: ExternalSenderUpdate, request: Request):
+    """Update sender display name, daily limit, signatures or pause/activate status."""
+    user = await _api_user(request, "campaigns:write")
+    sender = await db.senders.find_one(
+        {"id": sender_id, "user_id": user["id"]}, {"_id": 0}
+    )
+    if not sender:
+        raise HTTPException(status_code=404, detail="Sender account not found")
+    update = body.model_dump(exclude_none=True)
+    if sender.get("status") == "demo":
+        update.pop("status", None)
+    if update.get("status") == "active":
+        update["last_error"] = ""
+    if update:
+        await db.senders.update_one(
+            {"id": sender_id, "user_id": user["id"]}, {"$set": update}
+        )
+    fresh = await db.senders.find_one(
+        {"id": sender_id, "user_id": user["id"]}, {"_id": 0}
+    )
+    item = await sender_out(fresh)
+    return item.model_dump(mode="json")
