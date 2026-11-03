@@ -4,7 +4,6 @@ import { BadgeCheck, KeyRound, Loader2, Mail, ShieldCheck, UserRound } from "luc
 import { toast } from "sonner";
 import AppShell, { PageHeader } from "@/components/AppShell";
 import APIKeysPanel from "@/components/APIKeysPanel";
-import IntegrationsPanel from "@/components/IntegrationsPanel";
 import { Panel } from "@/components/ui-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,7 +59,7 @@ export default function Settings() {
 
   return (
     <AppShell>
-      <PageHeader eyebrow="Workspace preferences" title="Account settings" subtitle="Manage your profile, sign-in email, password, integrations, and API access." />
+      <PageHeader eyebrow="Workspace preferences" title="Account settings" subtitle="Manage your profile, sign-in email, password, and API access." />
       <div className="grid max-w-4xl gap-5">
         <Panel title="Profile & email" testId="settings-profile-panel">
           <form onSubmit={submitProfile} className="space-y-5 p-5 sm:p-6">
@@ -125,7 +124,6 @@ export default function Settings() {
           </form>
         </Panel>
 
-        <IntegrationsPanel />
         <APIKeysPanel />
       </div>
     </AppShell>
