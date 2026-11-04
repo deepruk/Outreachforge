@@ -155,7 +155,7 @@ export default function AIWriter() {
 
             <div className="space-y-3 rounded-lg border border-border p-3" data-testid="ai-writer-advanced-controls">
               <div className="space-y-1.5"><Label>What should AI write?</Label>
-                <Select value={component} onValueChange={(v) => setComponent(v as RewriteRequest["component"])}>
+                <Select value={component} onValueChange={(v) => setComponent(v as NonNullable<RewriteRequest["component"]>)}>
                   <SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
                     <SelectItem value="full_email">Complete email</SelectItem><SelectItem value="opener">Opener only</SelectItem><SelectItem value="body">Email body only</SelectItem><SelectItem value="cta">CTA only</SelectItem><SelectItem value="followup_sequence">3-email follow-up sequence</SelectItem>
                   </SelectContent>
