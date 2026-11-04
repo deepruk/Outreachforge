@@ -127,7 +127,17 @@ def _build_prompt(req: RewriteRequest) -> str:
         parts.append(f"Ideal customers: {', '.join(profile.ideal_customers)}")
         parts.append(f"Value propositions: {', '.join(profile.value_propositions)}")
         parts.append(f"Verified proof points: {', '.join(profile.proof_points)}")
-    if req.followup_count > 0:\n        parts.append(f"Create exactly {req.followup_count} follow-up emails after the initial email. Return them in a JSON array named followups. Each item must have subject, body, and preheader. Follow-ups must continue naturally from the initial email, add a genuinely new angle or useful detail, vary the CTA where appropriate, and never repeat the same message. Keep the initial email in the top-level subject/body/preheader fields. Preserve all personalization variables in every email.")\n    else:\n        parts.append("Return an empty followups array because no follow-ups were requested.")
+    if req.followup_count > 0:
+        parts.append(
+            f"Create exactly {req.followup_count} follow-up emails after the initial email. "
+            "Return them in a JSON array named followups. Each item must have subject, body, "
+            "and preheader. Follow-ups must continue naturally from the initial email, add a "
+            "genuinely new angle or useful detail, vary the CTA where appropriate, and never "
+            "repeat the same message. Keep the initial email in the top-level "
+            "subject/body/preheader fields. Preserve all personalization variables in every email."
+        )
+    else:
+        parts.append("Return an empty followups array because no follow-ups were requested.")
     if req.component == "opener":
         parts.append("Write only the opening hook/opener. Do not write the rest of the email.")
     elif req.component == "body":
