@@ -63,12 +63,20 @@ class RewriteRequest(BaseModel):
     example_script: str = Field(default="", max_length=8000)
     component: Literal["full_email", "opener", "body", "cta", "followup_sequence"] = "full_email"
     followup_context: str = Field(default="", max_length=8000)
+    followup_count: int = Field(default=0, ge=0, le=10)
+
+
+class FollowupEmail(BaseModel):
+    subject: str = ""
+    body: str = ""
+    preheader: str = ""
 
 
 class RewriteResponse(BaseModel):
     subject: str
     body: str
     preheader: str
+    followups: list[FollowupEmail] = Field(default_factory=list)
 
 
 _SYSTEM = """You are a world-class cold-email copywriter.
@@ -119,7 +127,7 @@ def _build_prompt(req: RewriteRequest) -> str:
         parts.append(f"Ideal customers: {', '.join(profile.ideal_customers)}")
         parts.append(f"Value propositions: {', '.join(profile.value_propositions)}")
         parts.append(f"Verified proof points: {', '.join(profile.proof_points)}")
-    if req.component == "opener":
+    if req.followup_count > 0:\n        parts.append(f"Create exactly {req.followup_count} follow-up emails after the initial email. Return them in a JSON array named followups. Each item must have subject, body, and preheader. Follow-ups must continue naturally from the initial email, add a genuinely new angle or useful detail, vary the CTA where appropriate, and never repeat the same message. Keep the initial email in the top-level subject/body/preheader fields. Preserve all personalization variables in every email.")\n    else:\n        parts.append("Return an empty followups array because no follow-ups were requested.")\n    if req.component == "opener":
         parts.append("Write only the opening hook/opener. Do not write the rest of the email.")
     elif req.component == "body":
         parts.append("Write only the main value proposition/body section. Do not include a greeting or CTA.")
