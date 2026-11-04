@@ -189,6 +189,10 @@ export interface RewriteRequest {
   audience?: string;
   business_profile?: BusinessProfile;
   selected_service?: string;
+  component?: "full_email" | "opener" | "body" | "cta" | "followup_sequence";
+  custom_instructions?: string;
+  example_script?: string;
+  followup_context?: string;
 }
 
 export interface RewriteResponse {
