@@ -736,7 +736,7 @@ function RewriteDialog({
                 <Label>Example email (optional)</Label>
                 <Textarea value={exampleScript} onChange={(e) => setExampleScript(e.target.value)} rows={4} maxLength={8000} placeholder="Paste an example. AI will use its style and structure, not copy its claims…" data-testid="rewrite-example-script" />
               </div>
-              {(goal === "followup" || component === "followup_sequence") && <div className="space-y-1.5">
+              {goal === "followup" && <div className="space-y-1.5">
                 <Label>Previous email / conversation context</Label>
                 <Textarea value={followupContext} onChange={(e) => setFollowupContext(e.target.value)} rows={3} maxLength={8000} placeholder="Paste the previous email or reply so the follow-up continues naturally…" data-testid="rewrite-followup-context" />
               </div>}
@@ -752,7 +752,7 @@ function RewriteDialog({
             </div>
             {preview.preheader && <div className="rounded-lg border border-border bg-background p-3"><Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Preheader</Label><p className="mt-1 text-xs text-foreground/90" data-testid="rewrite-preview-preheader">{preview.preheader}</p></div>}
             <div className="rounded-lg border border-border bg-background p-3"><Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Body</Label><pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-foreground/90" data-testid="rewrite-preview-body">{preview.body}</pre></div>
-            {!!preview.followups?.length && <div className="space-y-3 border-t border-border pt-3"><Label>Follow-up sequence ({preview.followups.length})</Label>{preview.followups.map((f,i)=><div key={i} className="space-y-2 rounded-lg border border-border p-3"><p className="text-sm font-semibold">Follow-up {i+1}</p><p className="text-sm font-medium">{f.subject || "No subject"}</p><pre className="whitespace-pre-wrap font-sans text-sm">{f.body}</pre></div>)}</div>}
+            {!!preview.followups?.length && <div className="space-y-3 border-t border-border pt-3"><Label>Follow-up sequence ({preview.followups.length})</Label>{preview.followups.map((f,i)=><div key={i} className="space-y-2 rounded-lg border border-border p-3"><p className="text-sm font-semibold">Follow-up {i+1}</p><p className="text-sm font-medium">{f.subject || "No subject"}</p>{f.preheader && <p className="text-xs text-muted-foreground">{f.preheader}</p>}<pre className="whitespace-pre-wrap font-sans text-sm">{f.body}</pre></div>)}</div>}
             {versions.length > 1 && <div className="space-y-2 border-t border-border pt-3"><Label>Previous versions</Label>{versions.slice(1).map((v, i) => <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-border p-2"><div className="min-w-0"><p className="truncate text-xs font-medium">{v.subject || `Version ${versions.length - i - 1}`}</p><p className="line-clamp-2 text-xs text-muted-foreground">{v.body}</p></div><Button size="sm" variant="outline" onClick={() => setPreview(v)}>View</Button></div>)}</div>}
           </div>
         )}
