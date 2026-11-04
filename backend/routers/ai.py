@@ -63,7 +63,7 @@ class RewriteRequest(BaseModel):
     example_script: str = Field(default="", max_length=8000)
     component: Literal["full_email", "opener", "body", "cta", "followup_sequence"] = "full_email"
     followup_context: str = Field(default="", max_length=8000)
-    followup_count: int = Field(default=0, ge=0, le=10)
+    followup_count: int = Field(default=3, ge=1, le=10)
 
 
 class FollowupEmail(BaseModel):
@@ -81,7 +81,7 @@ class RewriteResponse(BaseModel):
 
 _SYSTEM = """You are a world-class cold-email copywriter.
 Rules you MUST follow:
-- Return ONLY compact JSON with keys: subject, body, preheader, followups. followups must always be an array; each item has subject, body, preheader. Use an empty array when followup_count is zero. No markdown, no commentary.
+- Return ONLY compact JSON with keys: subject, body, preheader, followups. followups must always contain exactly the requested number of complete follow-up emails; each item has subject, body, preheader. Never return an empty followups array. No markdown, no commentary.
 - Preserve every template variable the author uses EXACTLY — tokens like {{first_name}}, {{company}}, {{title}}, {{sender_first_name}} and any {{...}} must appear verbatim.
 - Preserve {unsubscribe_link} if present.
 - Spintax like {Hi|Hey|Hello} is allowed — keep or write as plain text, never invent new spintax braces.
@@ -136,16 +136,7 @@ def _build_prompt(req: RewriteRequest) -> str:
             "repeat the same message. Keep the initial email in the top-level "
             "subject/body/preheader fields. Preserve all personalization variables in every email."
         )
-    else:
-        parts.append("Return an empty followups array because no follow-ups were requested.")
-    if req.component == "opener":
-        parts.append("Write only the opening hook/opener. Do not write the rest of the email.")
-    elif req.component == "body":
-        parts.append("Write only the main value proposition/body section. Do not include a greeting or CTA.")
-    elif req.component == "cta":
-        parts.append("Write only a concise call to action. Give one clear, low-friction next step.")
-    elif req.component == "followup_sequence":
-        parts.append("Write the initial email and requested follow-ups as separate structured items. Do not combine follow-ups into the body; use the followups JSON array.")
+    parts.append("Always write a complete initial email and all requested follow-up emails as separate structured items. Every email must have its own subject, preheader, and complete body. Never return only an opener, body fragment, or CTA.")
     if req.custom_instructions.strip():
         parts.append("Additional instructions from the user (follow these unless they conflict with factual accuracy or safety):\\n" + req.custom_instructions.strip())
     if req.example_script.strip():
@@ -406,4 +397,5 @@ async def rewrite_step(req: RewriteRequest, _user=Depends(current_user)) -> Rewr
         subject=str(data.get("subject", "")).strip()[:200],
         body=str(data.get("body", "")).strip(),
         preheader=str(data.get("preheader", "")).strip()[:140],
+        followups=[FollowupEmail(subject=str(item.get("subject", "")).strip()[:200], body=str(item.get("body", "")).strip(), preheader=str(item.get("preheader", "")).strip()[:140]) for item in data.get("followups", []) if isinstance(item, dict)],
     )
