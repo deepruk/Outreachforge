@@ -584,6 +584,11 @@ function RewriteDialog({
   const [profile, setProfile] = useState<WebsiteProfile | null>(null);
   const [selectedService, setSelectedService] = useState("");
   const [preview, setPreview] = useState<RewriteResponse | null>(null);
+  const [versions, setVersions] = useState<RewriteResponse[]>([]);
+  const [component, setComponent] = useState<RewriteRequest["component"]>("full_email");
+  const [customInstructions, setCustomInstructions] = useState("");
+  const [exampleScript, setExampleScript] = useState("");
+  const [followupContext, setFollowupContext] = useState("");
 
   const research = useMutation({
     mutationFn: () => apiPost<WebsiteProfile>("/ai/website-profile", { website: website.trim() }),
@@ -606,15 +611,19 @@ function RewriteDialog({
         audience: audience.trim() || undefined,
         business_profile: profile || undefined,
         selected_service: selectedService || product.trim(),
+        component,
+        custom_instructions: customInstructions,
+        example_script: exampleScript,
+        followup_context: followupContext,
       };
       return apiPost<RewriteResponse>("/ai/rewrite-step", payload);
     },
-    onSuccess: (r) => setPreview(r),
+    onSuccess: (r) => { setPreview(r); setVersions((prev) => [r, ...prev].slice(0, 10)); },
     onError: (e) => toast.error(errMsg(e)),
   });
 
   const reset = () => {
-    setPreview(null); setProduct(""); setProfile(null); setSelectedService("");
+    setPreview(null); setVersions([]); setProduct(""); setProfile(null); setSelectedService(""); setCustomInstructions(""); setExampleScript(""); setFollowupContext(""); setComponent("full_email");
     research.reset(); rewrite.reset();
   };
   const close = () => { reset(); onClose(); };
@@ -714,6 +723,34 @@ function RewriteDialog({
               <Label>Target audience</Label>
               <Input value={audience} onChange={(e) => setAudience(e.target.value)} maxLength={200} placeholder="e.g. marketing agencies" data-testid="rewrite-audience-input" />
             </div>
+
+            <div className="space-y-3 rounded-lg border border-border p-3" data-testid="rewrite-advanced-controls">
+              <div className="space-y-1.5">
+                <Label>What should AI write?</Label>
+                <Select value={component || "full_email"} onValueChange={(v) => setComponent(v as RewriteRequest["component"])}>
+                  <SelectTrigger data-testid="rewrite-component-select"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full_email">Complete email</SelectItem>
+                    <SelectItem value="opener">Opener only</SelectItem>
+                    <SelectItem value="body">Email body only</SelectItem>
+                    <SelectItem value="cta">CTA only</SelectItem>
+                    <SelectItem value="followup_sequence">3-email follow-up sequence</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Custom instructions</Label>
+                <Textarea value={customInstructions} onChange={(e) => setCustomInstructions(e.target.value)} rows={3} maxLength={4000} placeholder="Tell AI exactly what to write, avoid, include, or change…" data-testid="rewrite-custom-instructions" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Example email (optional)</Label>
+                <Textarea value={exampleScript} onChange={(e) => setExampleScript(e.target.value)} rows={4} maxLength={8000} placeholder="Paste an example. AI will use its style and structure, not copy its claims…" data-testid="rewrite-example-script" />
+              </div>
+              {(goal === "followup" || component === "followup_sequence") && <div className="space-y-1.5">
+                <Label>Previous email / conversation context</Label>
+                <Textarea value={followupContext} onChange={(e) => setFollowupContext(e.target.value)} rows={3} maxLength={8000} placeholder="Paste the previous email or reply so the follow-up continues naturally…" data-testid="rewrite-followup-context" />
+              </div>}
+            </div>
           </div>
         )}
 
@@ -725,6 +762,7 @@ function RewriteDialog({
             </div>
             {preview.preheader && <div className="rounded-lg border border-border bg-background p-3"><Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Preheader</Label><p className="mt-1 text-xs text-foreground/90" data-testid="rewrite-preview-preheader">{preview.preheader}</p></div>}
             <div className="rounded-lg border border-border bg-background p-3"><Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Body</Label><pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-foreground/90" data-testid="rewrite-preview-body">{preview.body}</pre></div>
+            {versions.length > 1 && <div className="space-y-2 border-t border-border pt-3"><Label>Previous versions</Label>{versions.slice(1).map((v, i) => <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-border p-2"><div className="min-w-0"><p className="truncate text-xs font-medium">{v.subject || `Version ${versions.length - i - 1}`}</p><p className="line-clamp-2 text-xs text-muted-foreground">{v.body}</p></div><Button size="sm" variant="outline" onClick={() => setPreview(v)}>View</Button></div>)}</div>}
           </div>
         )}
         <DialogFooter>
@@ -738,6 +776,7 @@ function RewriteDialog({
           ) : (
             <>
               <Button variant="outline" onClick={() => setPreview(null)} data-testid="rewrite-tweak">Edit settings</Button>
+              <Button variant="outline" onClick={() => rewrite.mutate()} disabled={rewrite.isPending} data-testid="rewrite-another">{rewrite.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Generate another</Button>
               <Button onClick={() => { onApply(preview); close(); toast.success("Step updated with AI draft"); }} data-testid="rewrite-apply">Replace step</Button>
             </>
           )}
