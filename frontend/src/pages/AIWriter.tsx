@@ -42,7 +42,6 @@ export default function AIWriter() {
   const [preheader, setPreheader] = useState("");
   const [draft, setDraft] = useState<RewriteResponse | null>(null);
   const [versions, setVersions] = useState<RewriteResponse[]>([]);
-  const [component, setComponent] = useState<"full_email" | "opener" | "body" | "cta" | "followup_sequence">("full_email");
   const [customInstructions, setCustomInstructions] = useState("");
   const [exampleScript, setExampleScript] = useState("");
   const [followupContext, setFollowupContext] = useState("");
@@ -80,11 +79,11 @@ export default function AIWriter() {
         product: service !== "__best_fit__" ? service : manualService.trim(),
         selected_service: service === "__best_fit__" ? "__best_fit__" : service,
         business_profile: profile || undefined,
-        component,
+        component: "full_email",
         custom_instructions: customInstructions,
         example_script: exampleScript,
         followup_context: followupContext,
-        followup_count: Number(followupCount),
+        followup_count: Math.max(1, Number(followupCount) || 3),
       });
       setDraft(result);
       setVersions((prev) => [result, ...prev].slice(0, 10));
@@ -156,19 +155,12 @@ export default function AIWriter() {
             <div className="space-y-1.5"><Label>Preheader (optional)</Label><Input value={preheader} onChange={(e) => setPreheader(e.target.value)} placeholder="Short preview text" /></div>
 
             <div className="space-y-3 rounded-lg border border-border p-3" data-testid="ai-writer-advanced-controls">
-              <div className="space-y-1.5"><Label>What should AI write?</Label>
-                <Select value={component} onValueChange={(v) => setComponent(v as NonNullable<RewriteRequest["component"]>)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
-                    <SelectItem value="full_email">Complete email</SelectItem><SelectItem value="opener">Opener only</SelectItem><SelectItem value="body">Email body only</SelectItem><SelectItem value="cta">CTA only</SelectItem><SelectItem value="followup_sequence">Complete email + follow-ups</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5"><Label>Number of follow-ups</Label><Select value={followupCount} onValueChange={setFollowupCount}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Array.from({ length: 11 }, (_, i) => <SelectItem key={i} value={String(i)}>{i === 0 ? "No follow-ups" : `${i} follow-up${i === 1 ? "" : "s"}`}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">The AI will generate the initial email plus this many distinct follow-ups.</p></div>
+              <div className="space-y-1.5"><Label>Number of follow-ups</Label><Select value={followupCount} onValueChange={setFollowupCount}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Array.from({ length: 10 }, (_, i) => i + 1).map((n) => <SelectItem key={n} value={String(n)}>{`${n} follow-up${n === 1 ? "" : "s"}`}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">A complete initial email and at least one complete follow-up are always generated.</p></div>
               <div className="space-y-1.5"><Label>Custom instructions</Label><Textarea value={customInstructions} onChange={(e) => setCustomInstructions(e.target.value)} rows={3} maxLength={4000} placeholder="Tell AI exactly what to write, include, or avoid…" /></div>
               <div className="space-y-1.5"><Label>Example script (optional)</Label><Textarea value={exampleScript} onChange={(e) => setExampleScript(e.target.value)} rows={4} maxLength={8000} placeholder="Paste an example for AI to follow in style and structure…" /></div>
               {(goal === "followup" || component === "followup_sequence") && <div className="space-y-1.5"><Label>Previous email / conversation context</Label><Textarea value={followupContext} onChange={(e) => setFollowupContext(e.target.value)} rows={3} maxLength={8000} placeholder="Paste the previous email or reply…" /></div>}
             </div>
-            <Button className="w-full" onClick={generate} disabled={generating || !profile}><Sparkles className="size-4" />{generating ? "Generating email…" : "Generate personalized email"}<ArrowRight className="size-4" /></Button>
+            <Button className="w-full" onClick={generate} disabled={generating || !profile}><Sparkles className="size-4" />{generating ? "Generating email…" : "Generate complete sequence"}<ArrowRight className="size-4" /></Button>
             {!profile && <p className="text-xs text-muted-foreground">Read your website first to enable website-aware generation.</p>}
           </section>
 
@@ -177,8 +169,8 @@ export default function AIWriter() {
             <div className="space-y-1"><Label>Subject</Label><div className="rounded-lg border border-border bg-background p-3 text-sm">{draft.subject || "—"}</div></div>
             <div className="space-y-1"><Label>Preheader</Label><div className="rounded-lg border border-border bg-background p-3 text-sm">{draft.preheader || "—"}</div></div>
             <div className="space-y-1"><Label>Body</Label><pre className="whitespace-pre-wrap rounded-lg border border-border bg-background p-3 font-sans text-sm">{draft.body}</pre></div>
-            {!!draft.followups?.length && <div className="space-y-3 border-t border-border pt-3"><Label>Follow-up sequence ({draft.followups.length})</Label>{draft.followups.map((f,i)=><div key={i} className="space-y-2 rounded-lg border border-border p-3"><p className="text-sm font-semibold">Follow-up {i+1}</p><p className="text-sm font-medium">{f.subject || "No subject"}</p><pre className="whitespace-pre-wrap font-sans text-sm">{f.body}</pre></div>)}</div>}
-            <div className="flex flex-wrap gap-2"><Button onClick={applyDraft}><Check className="size-4" /> Edit this draft</Button><Button variant="outline" onClick={generate} disabled={generating}><RefreshCw className="size-4" /> {generating ? "Generating…" : "Generate another version"}</Button></div>
+            {!!draft.followups?.length && <div className="space-y-3 border-t border-border pt-3"><Label>Follow-up sequence ({draft.followups.length})</Label>{draft.followups.map((f,i)=><div key={i} className="space-y-2 rounded-lg border border-border p-3"><p className="text-sm font-semibold">Follow-up {i+1}</p><p className="text-sm font-medium">{f.subject || "No subject"}</p>{f.preheader && <p className="text-xs text-muted-foreground">{f.preheader}</p>}<pre className="whitespace-pre-wrap font-sans text-sm">{f.body}</pre></div>)}</div>}
+            <div className="flex flex-wrap gap-2"><Button onClick={applyDraft}><Check className="size-4" /> Use initial email in editor</Button><Button variant="outline" onClick={generate} disabled={generating}><RefreshCw className="size-4" /> {generating ? "Generating…" : "Generate another version"}</Button></div>
             <p className="text-xs text-muted-foreground">Review all claims and personalization tokens before using this email in a campaign. Each new generation is saved below so you can compare versions.</p>
             {versions.length > 1 && <div className="space-y-2 border-t border-border pt-3"><Label>Previous versions ({versions.length - 1})</Label>{versions.slice(1).map((v, i) => <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{v.subject || `Version ${versions.length - i - 1}`}</p><p className="line-clamp-2 text-xs text-muted-foreground">{v.body}</p></div><Button size="sm" variant="outline" onClick={() => setDraft(v)}>View</Button></div>)}</div>}
           </section>}
