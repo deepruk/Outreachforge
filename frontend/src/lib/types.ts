@@ -193,12 +193,14 @@ export interface RewriteRequest {
   custom_instructions?: string;
   example_script?: string;
   followup_context?: string;
+  followup_count?: number;
 }
 
 export interface RewriteResponse {
   subject: string;
   body: string;
   preheader: string;
+  followups?: { subject: string; body: string; preheader: string }[];
 }
 
 export type LeadStatus = "pending" | "in_progress" | "completed" | "replied" | "bounced" | "unsubscribed";
