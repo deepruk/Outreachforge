@@ -585,7 +585,7 @@ function RewriteDialog({
   const [selectedService, setSelectedService] = useState("");
   const [preview, setPreview] = useState<RewriteResponse | null>(null);
   const [versions, setVersions] = useState<RewriteResponse[]>([]);
-  const [component, setComponent] = useState<RewriteRequest["component"]>("full_email");
+  
   const [customInstructions, setCustomInstructions] = useState("");
   const [exampleScript, setExampleScript] = useState("");
   const [followupContext, setFollowupContext] = useState("");
@@ -612,11 +612,11 @@ function RewriteDialog({
         audience: audience.trim() || undefined,
         business_profile: profile || undefined,
         selected_service: selectedService || product.trim(),
-        component,
+        component: "full_email",
         custom_instructions: customInstructions,
         example_script: exampleScript,
         followup_context: followupContext,
-        followup_count: Number(followupCount),
+        followup_count: Math.max(1, Number(followupCount) || 3),
       };
       return apiPost<RewriteResponse>("/ai/rewrite-step", payload);
     },
@@ -625,7 +625,7 @@ function RewriteDialog({
   });
 
   const reset = () => {
-    setPreview(null); setVersions([]); setProduct(""); setProfile(null); setSelectedService(""); setCustomInstructions(""); setExampleScript(""); setFollowupContext(""); setComponent("full_email");
+    setPreview(null); setVersions([]); setProduct(""); setProfile(null); setSelectedService(""); setCustomInstructions(""); setExampleScript(""); setFollowupContext("");
     research.reset(); rewrite.reset();
   };
   const close = () => { reset(); onClose(); };
@@ -727,20 +727,7 @@ function RewriteDialog({
             </div>
 
             <div className="space-y-3 rounded-lg border border-border p-3" data-testid="rewrite-advanced-controls">
-              <div className="space-y-1.5">
-                <Label>What should AI write?</Label>
-                <Select value={component || "full_email"} onValueChange={(v) => setComponent(v as RewriteRequest["component"])}>
-                  <SelectTrigger data-testid="rewrite-component-select"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="full_email">Complete email</SelectItem>
-                    <SelectItem value="opener">Opener only</SelectItem>
-                    <SelectItem value="body">Email body only</SelectItem>
-                    <SelectItem value="cta">CTA only</SelectItem>
-                    <SelectItem value="followup_sequence">Complete email + follow-ups</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5"><Label>Number of follow-ups</Label><Select value={followupCount} onValueChange={setFollowupCount}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Array.from({ length: 11 }, (_, i) => <SelectItem key={i} value={String(i)}>{i === 0 ? "No follow-ups" : `${i} follow-up${i === 1 ? "" : "s"}`}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">Generate the initial email plus the selected number of follow-ups.</p></div>
+              <div className="space-y-1.5"><Label>Number of follow-ups</Label><Select value={followupCount} onValueChange={setFollowupCount}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Array.from({ length: 10 }, (_, i) => i + 1).map((n) => <SelectItem key={n} value={String(n)}>{`${n} follow-up${n === 1 ? "" : "s"}`}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">The initial email and at least one complete follow-up are always generated.</p></div>
               <div className="space-y-1.5">
                 <Label>Custom instructions</Label>
                 <Textarea value={customInstructions} onChange={(e) => setCustomInstructions(e.target.value)} rows={3} maxLength={4000} placeholder="Tell AI exactly what to write, avoid, include, or change…" data-testid="rewrite-custom-instructions" />
@@ -781,7 +768,7 @@ function RewriteDialog({
             <>
               <Button variant="outline" onClick={() => setPreview(null)} data-testid="rewrite-tweak">Edit settings</Button>
               <Button variant="outline" onClick={() => rewrite.mutate()} disabled={rewrite.isPending} data-testid="rewrite-another">{rewrite.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Generate another</Button>
-              <Button onClick={() => { onApply(preview); close(); toast.success("Step updated with AI draft"); }} data-testid="rewrite-apply">Replace step</Button>
+              <Button onClick={() => { onApply(preview); close(); toast.success("Complete email sequence added to campaign"); }} data-testid="rewrite-apply">Replace sequence</Button>
             </>
           )}
         </DialogFooter>
@@ -897,16 +884,14 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
   };
   const applyRewrite = (r: RewriteResponse) => {
     if (!cur) return;
-    patch({ subject: r.subject || cur.subject, body: r.body || cur.body, preheader: r.preheader || cur.preheader });
-    if (r.followups?.length) {
-      const nextSteps: Step[] = r.followups.map((f, i) => ({
-        id: crypto.randomUUID(), subject: f.subject || "", subject_b: "", ab_winner: null,
-        body: f.body || "", delay_days: (i + 1) * 3, preheader: f.preheader || "",
-        track_opens: null, track_clicks: null,
-      }));
-      setSteps((prev) => [...prev.slice(0, active + 1), ...nextSteps]);
-      toast.success(`Added ${nextSteps.length} follow-up steps to the campaign`);
-    }
+    const initial: Step = { ...cur, subject: r.subject || cur.subject, body: r.body || cur.body, preheader: r.preheader || cur.preheader };
+    const nextSteps: Step[] = (r.followups || []).map((f, i) => ({
+      id: crypto.randomUUID(), subject: f.subject || "", subject_b: "", ab_winner: null,
+      body: f.body || "", delay_days: (i + 1) * 3, preheader: f.preheader || "",
+      track_opens: null, track_clicks: null,
+    }));
+    setSteps((prev) => [...prev.slice(0, active), initial, ...nextSteps]);
+    setActive(active);
   };
 
   return (
