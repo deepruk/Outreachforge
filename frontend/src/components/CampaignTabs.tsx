@@ -589,6 +589,7 @@ function RewriteDialog({
   const [customInstructions, setCustomInstructions] = useState("");
   const [exampleScript, setExampleScript] = useState("");
   const [followupContext, setFollowupContext] = useState("");
+  const [followupCount, setFollowupCount] = useState("3");
 
   const research = useMutation({
     mutationFn: () => apiPost<WebsiteProfile>("/ai/website-profile", { website: website.trim() }),
@@ -615,6 +616,7 @@ function RewriteDialog({
         custom_instructions: customInstructions,
         example_script: exampleScript,
         followup_context: followupContext,
+        followup_count: Number(followupCount),
       };
       return apiPost<RewriteResponse>("/ai/rewrite-step", payload);
     },
@@ -734,10 +736,11 @@ function RewriteDialog({
                     <SelectItem value="opener">Opener only</SelectItem>
                     <SelectItem value="body">Email body only</SelectItem>
                     <SelectItem value="cta">CTA only</SelectItem>
-                    <SelectItem value="followup_sequence">3-email follow-up sequence</SelectItem>
+                    <SelectItem value="followup_sequence">Complete email + follow-ups</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5"><Label>Number of follow-ups</Label><Select value={followupCount} onValueChange={setFollowupCount}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Array.from({ length: 11 }, (_, i) => <SelectItem key={i} value={String(i)}>{i === 0 ? "No follow-ups" : `${i} follow-up${i === 1 ? "" : "s"}`}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">Generate the initial email plus the selected number of follow-ups.</p></div>
               <div className="space-y-1.5">
                 <Label>Custom instructions</Label>
                 <Textarea value={customInstructions} onChange={(e) => setCustomInstructions(e.target.value)} rows={3} maxLength={4000} placeholder="Tell AI exactly what to write, avoid, include, or change…" data-testid="rewrite-custom-instructions" />
@@ -762,6 +765,7 @@ function RewriteDialog({
             </div>
             {preview.preheader && <div className="rounded-lg border border-border bg-background p-3"><Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Preheader</Label><p className="mt-1 text-xs text-foreground/90" data-testid="rewrite-preview-preheader">{preview.preheader}</p></div>}
             <div className="rounded-lg border border-border bg-background p-3"><Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Body</Label><pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-foreground/90" data-testid="rewrite-preview-body">{preview.body}</pre></div>
+            {!!preview.followups?.length && <div className="space-y-3 border-t border-border pt-3"><Label>Follow-up sequence ({preview.followups.length})</Label>{preview.followups.map((f,i)=><div key={i} className="space-y-2 rounded-lg border border-border p-3"><p className="text-sm font-semibold">Follow-up {i+1}</p><p className="text-sm font-medium">{f.subject || "No subject"}</p><pre className="whitespace-pre-wrap font-sans text-sm">{f.body}</pre></div>)}</div>}
             {versions.length > 1 && <div className="space-y-2 border-t border-border pt-3"><Label>Previous versions</Label>{versions.slice(1).map((v, i) => <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-border p-2"><div className="min-w-0"><p className="truncate text-xs font-medium">{v.subject || `Version ${versions.length - i - 1}`}</p><p className="line-clamp-2 text-xs text-muted-foreground">{v.body}</p></div><Button size="sm" variant="outline" onClick={() => setPreview(v)}>View</Button></div>)}</div>}
           </div>
         )}
@@ -894,6 +898,15 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
   const applyRewrite = (r: RewriteResponse) => {
     if (!cur) return;
     patch({ subject: r.subject || cur.subject, body: r.body || cur.body, preheader: r.preheader || cur.preheader });
+    if (r.followups?.length) {
+      const nextSteps: Step[] = r.followups.map((f, i) => ({
+        id: crypto.randomUUID(), subject: f.subject || "", subject_b: "", ab_winner: null,
+        body: f.body || "", delay_days: (i + 1) * 3, preheader: f.preheader || "",
+        track_opens: null, track_clicks: null,
+      }));
+      setSteps((prev) => [...prev.slice(0, active + 1), ...nextSteps]);
+      toast.success(`Added ${nextSteps.length} follow-up steps to the campaign`);
+    }
   };
 
   return (
