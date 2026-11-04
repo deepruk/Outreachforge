@@ -390,6 +390,9 @@ async def rewrite_step(req: RewriteRequest, _user=Depends(current_user)) -> Rewr
             parts = result["candidates"][0]["content"]["parts"]
             reply = "".join(part.get("text", "") for part in parts)
         data = _parse_llm_json(reply)
+        generated_followups = data.get("followups", [])
+        if not isinstance(generated_followups, list) or len(generated_followups) != req.followup_count:
+            raise HTTPException(status_code=502, detail=f"The AI returned {len(generated_followups) if isinstance(generated_followups, list) else 0} follow-ups, but {req.followup_count} were requested. Please generate again.")
     except (ValueError, KeyError, IndexError, TypeError, json.JSONDecodeError):
         raise HTTPException(status_code=502, detail="Gemini returned a response we couldn't parse. Try again.")
 
