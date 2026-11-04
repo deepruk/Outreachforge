@@ -81,7 +81,7 @@ class RewriteResponse(BaseModel):
 
 _SYSTEM = """You are a world-class cold-email copywriter.
 Rules you MUST follow:
-- Return ONLY compact JSON with keys: subject, body, preheader. No markdown, no commentary.
+- Return ONLY compact JSON with keys: subject, body, preheader, followups. followups must always be an array; each item has subject, body, preheader. Use an empty array when followup_count is zero. No markdown, no commentary.
 - Preserve every template variable the author uses EXACTLY — tokens like {{first_name}}, {{company}}, {{title}}, {{sender_first_name}} and any {{...}} must appear verbatim.
 - Preserve {unsubscribe_link} if present.
 - Spintax like {Hi|Hey|Hello} is allowed — keep or write as plain text, never invent new spintax braces.
