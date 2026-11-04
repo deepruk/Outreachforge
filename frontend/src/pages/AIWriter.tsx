@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { RewriteGoal, RewriteLength, RewriteTone, RewriteResponse, RewriteRequest } from "@/lib/types";
+import type { RewriteGoal, RewriteLength, RewriteTone, RewriteResponse } from "@/lib/types";
 
 type BusinessProfile = {
   website: string;
@@ -158,7 +158,7 @@ export default function AIWriter() {
               <div className="space-y-1.5"><Label>Number of follow-ups</Label><Select value={followupCount} onValueChange={setFollowupCount}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Array.from({ length: 10 }, (_, i) => i + 1).map((n) => <SelectItem key={n} value={String(n)}>{`${n} follow-up${n === 1 ? "" : "s"}`}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">A complete initial email and at least one complete follow-up are always generated.</p></div>
               <div className="space-y-1.5"><Label>Custom instructions</Label><Textarea value={customInstructions} onChange={(e) => setCustomInstructions(e.target.value)} rows={3} maxLength={4000} placeholder="Tell AI exactly what to write, include, or avoid…" /></div>
               <div className="space-y-1.5"><Label>Example script (optional)</Label><Textarea value={exampleScript} onChange={(e) => setExampleScript(e.target.value)} rows={4} maxLength={8000} placeholder="Paste an example for AI to follow in style and structure…" /></div>
-              {(goal === "followup" || component === "followup_sequence") && <div className="space-y-1.5"><Label>Previous email / conversation context</Label><Textarea value={followupContext} onChange={(e) => setFollowupContext(e.target.value)} rows={3} maxLength={8000} placeholder="Paste the previous email or reply…" /></div>}
+              {goal === "followup" && <div className="space-y-1.5"><Label>Previous email / conversation context</Label><Textarea value={followupContext} onChange={(e) => setFollowupContext(e.target.value)} rows={3} maxLength={8000} placeholder="Paste the previous email or reply…" /></div>}
             </div>
             <Button className="w-full" onClick={generate} disabled={generating || !profile}><Sparkles className="size-4" />{generating ? "Generating email…" : "Generate complete sequence"}<ArrowRight className="size-4" /></Button>
             {!profile && <p className="text-xs text-muted-foreground">Read your website first to enable website-aware generation.</p>}
