@@ -41,6 +41,11 @@ export default function AIWriter() {
   const [body, setBody] = useState("");
   const [preheader, setPreheader] = useState("");
   const [draft, setDraft] = useState<RewriteResponse | null>(null);
+  const [versions, setVersions] = useState<RewriteResponse[]>([]);
+  const [component, setComponent] = useState<"full_email" | "opener" | "body" | "cta" | "followup_sequence">("full_email");
+  const [customInstructions, setCustomInstructions] = useState("");
+  const [exampleScript, setExampleScript] = useState("");
+  const [followupContext, setFollowupContext] = useState("");
   const [researching, setResearching] = useState(false);
   const [generating, setGenerating] = useState(false);
 
@@ -74,6 +79,10 @@ export default function AIWriter() {
         product: service !== "__best_fit__" ? service : manualService.trim(),
         selected_service: service === "__best_fit__" ? "__best_fit__" : service,
         business_profile: profile || undefined,
+        component,
+        custom_instructions: customInstructions,
+        example_script: exampleScript,
+        followup_context: followupContext,
       });
       setDraft(result);
       toast.success("Email draft generated");
@@ -138,7 +147,7 @@ export default function AIWriter() {
 
         <div className="space-y-5">
           <section className="rounded-xl border border-border bg-panel p-5 space-y-4">
-            <div className="flex items-start gap-3"><span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary"><Mail className="size-5" /></span><div><h2 className="font-semibold">3. Add context and generate</h2><p className="mt-1 text-sm text-muted-foreground">Start from scratch or paste an existing draft. Personalization variables are preserved.</p></div></div>
+            <div className="flex items-start gap-3"><span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary"><Mail className="size-5" /></span><div><h2 className="font-semibold">4. Add your draft and generate</h2><p className="mt-1 text-sm text-muted-foreground">Start from scratch or paste an existing draft. Personalization variables are preserved.</p></div></div>
             <div className="space-y-1.5"><Label>Subject</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Optional existing subject" data-testid="ai-writer-subject" /></div>
             <div className="space-y-1.5"><Label>Email body</Label><Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={9} placeholder={"Hi {{first_name}},\n\nWrite your existing draft here, or leave blank to start from scratch."} data-testid="ai-writer-body" /></div>
             <div className="space-y-1.5"><Label>Preheader (optional)</Label><Input value={preheader} onChange={(e) => setPreheader(e.target.value)} placeholder="Short preview text" /></div>
@@ -151,8 +160,8 @@ export default function AIWriter() {
             <div className="space-y-1"><Label>Subject</Label><div className="rounded-lg border border-border bg-background p-3 text-sm">{draft.subject || "—"}</div></div>
             <div className="space-y-1"><Label>Preheader</Label><div className="rounded-lg border border-border bg-background p-3 text-sm">{draft.preheader || "—"}</div></div>
             <div className="space-y-1"><Label>Body</Label><pre className="whitespace-pre-wrap rounded-lg border border-border bg-background p-3 font-sans text-sm">{draft.body}</pre></div>
-            <div className="flex flex-wrap gap-2"><Button onClick={applyDraft}><Check className="size-4" /> Edit this draft</Button><Button variant="outline" onClick={generate} disabled={generating}><RefreshCw className="size-4" /> Regenerate</Button></div>
-            <p className="text-xs text-muted-foreground">Review all claims and personalization tokens before using this email in a campaign.</p>
+            <div className="flex flex-wrap gap-2"><Button onClick={applyDraft}><Check className="size-4" /> Edit this draft</Button><Button variant="outline" onClick={generate} disabled={generating}><RefreshCw className="size-4" /> {generating ? "Generating…" : "Generate another version"}</Button></div>
+            <p className="text-xs text-muted-foreground">Review all claims and personalization tokens before using this email in a campaign. Each new generation is saved below so you can compare versions.</p>\n            {versions.length > 1 && <div className="space-y-2 border-t border-border pt-3"><Label>Previous versions ({versions.length - 1})</Label>{versions.slice(1).map((v, i) => <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{v.subject || `Version ${versions.length - i - 1}`}</p><p className="line-clamp-2 text-xs text-muted-foreground">{v.body}</p></div><Button size="sm" variant="outline" onClick={() => setDraft(v)}>View</Button></div>)}</div>}
           </section>}
         </div>
       </div>
