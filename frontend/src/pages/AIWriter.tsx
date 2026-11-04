@@ -85,6 +85,7 @@ export default function AIWriter() {
         followup_context: followupContext,
       });
       setDraft(result);
+      setVersions((prev) => [result, ...prev].slice(0, 10));
       toast.success("Email draft generated");
     } catch (e) {
       toast.error(errMsg(e));
@@ -151,6 +152,19 @@ export default function AIWriter() {
             <div className="space-y-1.5"><Label>Subject</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Optional existing subject" data-testid="ai-writer-subject" /></div>
             <div className="space-y-1.5"><Label>Email body</Label><Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={9} placeholder={"Hi {{first_name}},\n\nWrite your existing draft here, or leave blank to start from scratch."} data-testid="ai-writer-body" /></div>
             <div className="space-y-1.5"><Label>Preheader (optional)</Label><Input value={preheader} onChange={(e) => setPreheader(e.target.value)} placeholder="Short preview text" /></div>
+
+            <div className="space-y-3 rounded-lg border border-border p-3" data-testid="ai-writer-advanced-controls">
+              <div className="space-y-1.5"><Label>What should AI write?</Label>
+                <Select value={component} onValueChange={(v) => setComponent(v as RewriteRequest["component"])}>
+                  <SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
+                    <SelectItem value="full_email">Complete email</SelectItem><SelectItem value="opener">Opener only</SelectItem><SelectItem value="body">Email body only</SelectItem><SelectItem value="cta">CTA only</SelectItem><SelectItem value="followup_sequence">3-email follow-up sequence</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label>Custom instructions</Label><Textarea value={customInstructions} onChange={(e) => setCustomInstructions(e.target.value)} rows={3} maxLength={4000} placeholder="Tell AI exactly what to write, include, or avoid…" /></div>
+              <div className="space-y-1.5"><Label>Example script (optional)</Label><Textarea value={exampleScript} onChange={(e) => setExampleScript(e.target.value)} rows={4} maxLength={8000} placeholder="Paste an example for AI to follow in style and structure…" /></div>
+              {(goal === "followup" || component === "followup_sequence") && <div className="space-y-1.5"><Label>Previous email / conversation context</Label><Textarea value={followupContext} onChange={(e) => setFollowupContext(e.target.value)} rows={3} maxLength={8000} placeholder="Paste the previous email or reply…" /></div>}
+            </div>
             <Button className="w-full" onClick={generate} disabled={generating || !profile}><Sparkles className="size-4" />{generating ? "Generating email…" : "Generate personalized email"}<ArrowRight className="size-4" /></Button>
             {!profile && <p className="text-xs text-muted-foreground">Read your website first to enable website-aware generation.</p>}
           </section>
@@ -161,7 +175,8 @@ export default function AIWriter() {
             <div className="space-y-1"><Label>Preheader</Label><div className="rounded-lg border border-border bg-background p-3 text-sm">{draft.preheader || "—"}</div></div>
             <div className="space-y-1"><Label>Body</Label><pre className="whitespace-pre-wrap rounded-lg border border-border bg-background p-3 font-sans text-sm">{draft.body}</pre></div>
             <div className="flex flex-wrap gap-2"><Button onClick={applyDraft}><Check className="size-4" /> Edit this draft</Button><Button variant="outline" onClick={generate} disabled={generating}><RefreshCw className="size-4" /> {generating ? "Generating…" : "Generate another version"}</Button></div>
-            <p className="text-xs text-muted-foreground">Review all claims and personalization tokens before using this email in a campaign. Each new generation is saved below so you can compare versions.</p>\n            {versions.length > 1 && <div className="space-y-2 border-t border-border pt-3"><Label>Previous versions ({versions.length - 1})</Label>{versions.slice(1).map((v, i) => <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{v.subject || `Version ${versions.length - i - 1}`}</p><p className="line-clamp-2 text-xs text-muted-foreground">{v.body}</p></div><Button size="sm" variant="outline" onClick={() => setDraft(v)}>View</Button></div>)}</div>}
+            <p className="text-xs text-muted-foreground">Review all claims and personalization tokens before using this email in a campaign. Each new generation is saved below so you can compare versions.</p>
+            {versions.length > 1 && <div className="space-y-2 border-t border-border pt-3"><Label>Previous versions ({versions.length - 1})</Label>{versions.slice(1).map((v, i) => <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{v.subject || `Version ${versions.length - i - 1}`}</p><p className="line-clamp-2 text-xs text-muted-foreground">{v.body}</p></div><Button size="sm" variant="outline" onClick={() => setDraft(v)}>View</Button></div>)}</div>}
           </section>}
         </div>
       </div>
