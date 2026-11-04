@@ -59,6 +59,10 @@ class RewriteRequest(BaseModel):
     audience: str = Field(default="", max_length=200)
     business_profile: BusinessProfile | None = None
     selected_service: str = Field(default="", max_length=400)
+    custom_instructions: str = Field(default="", max_length=4000)
+    example_script: str = Field(default="", max_length=8000)
+    component: Literal["full_email", "opener", "body", "cta", "followup_sequence"] = "full_email"
+    followup_context: str = Field(default="", max_length=8000)
 
 
 class RewriteResponse(BaseModel):
@@ -115,6 +119,20 @@ def _build_prompt(req: RewriteRequest) -> str:
         parts.append(f"Ideal customers: {', '.join(profile.ideal_customers)}")
         parts.append(f"Value propositions: {', '.join(profile.value_propositions)}")
         parts.append(f"Verified proof points: {', '.join(profile.proof_points)}")
+    if req.component == "opener":
+        parts.append("Write only the opening hook/opener. Do not write the rest of the email.")
+    elif req.component == "body":
+        parts.append("Write only the main value proposition/body section. Do not include a greeting or CTA.")
+    elif req.component == "cta":
+        parts.append("Write only a concise call to action. Give one clear, low-friction next step.")
+    elif req.component == "followup_sequence":
+        parts.append("Write a complete follow-up sequence of three distinct follow-up emails. Each must add a new angle, avoid repeating earlier wording, and preserve the same offer and context. Return the three emails in the body separated by clear labels Follow-up 1, Follow-up 2, Follow-up 3.")
+    if req.custom_instructions.strip():
+        parts.append("Additional instructions from the user (follow these unless they conflict with factual accuracy or safety):\\n" + req.custom_instructions.strip())
+    if req.example_script.strip():
+        parts.append("Use the following example as a style/structure reference only. Do not copy it verbatim or assume its claims are true. Match its voice, pacing, and structure:\\n" + req.example_script.strip())
+    if req.followup_context.strip():
+        parts.append("Previous email / conversation context for this follow-up:\\n" + req.followup_context.strip())
     original = req.step.body.strip() or "(no draft yet — write from scratch)"
     original_subject = req.step.subject.strip() or "(no draft)"
     parts.append(f"\nOriginal subject:\n{original_subject}")
