@@ -127,14 +127,15 @@ def _build_prompt(req: RewriteRequest) -> str:
         parts.append(f"Ideal customers: {', '.join(profile.ideal_customers)}")
         parts.append(f"Value propositions: {', '.join(profile.value_propositions)}")
         parts.append(f"Verified proof points: {', '.join(profile.proof_points)}")
-    if req.followup_count > 0:\n        parts.append(f"Create exactly {req.followup_count} follow-up emails after the initial email. Return them in a JSON array named followups. Each item must have subject, body, and preheader. Follow-ups must continue naturally from the initial email, add a genuinely new angle or useful detail, vary the CTA where appropriate, and never repeat the same message. Keep the initial email in the top-level subject/body/preheader fields. Preserve all personalization variables in every email.")\n    else:\n        parts.append("Return an empty followups array because no follow-ups were requested.")\n    if req.component == "opener":
+    if req.followup_count > 0:\n        parts.append(f"Create exactly {req.followup_count} follow-up emails after the initial email. Return them in a JSON array named followups. Each item must have subject, body, and preheader. Follow-ups must continue naturally from the initial email, add a genuinely new angle or useful detail, vary the CTA where appropriate, and never repeat the same message. Keep the initial email in the top-level subject/body/preheader fields. Preserve all personalization variables in every email.")\n    else:\n        parts.append("Return an empty followups array because no follow-ups were requested.")
+    if req.component == "opener":
         parts.append("Write only the opening hook/opener. Do not write the rest of the email.")
     elif req.component == "body":
         parts.append("Write only the main value proposition/body section. Do not include a greeting or CTA.")
     elif req.component == "cta":
         parts.append("Write only a concise call to action. Give one clear, low-friction next step.")
     elif req.component == "followup_sequence":
-        parts.append("Write a complete follow-up sequence of three distinct follow-up emails. Each must add a new angle, avoid repeating earlier wording, and preserve the same offer and context. Return the three emails in the body separated by clear labels Follow-up 1, Follow-up 2, Follow-up 3.")
+        parts.append("Write the initial email and requested follow-ups as separate structured items. Do not combine follow-ups into the body; use the followups JSON array.")
     if req.custom_instructions.strip():
         parts.append("Additional instructions from the user (follow these unless they conflict with factual accuracy or safety):\\n" + req.custom_instructions.strip())
     if req.example_script.strip():
