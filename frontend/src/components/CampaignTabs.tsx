@@ -312,8 +312,13 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
                       <SelectItem value="field:last_name">Last name</SelectItem>
                       <SelectItem value="field:company">Company</SelectItem>
                       <SelectItem value="field:title">Job title</SelectItem>
+                      <SelectItem value="custom:phone_number">Phone Number</SelectItem>
+                      <SelectItem value="custom:website">Website</SelectItem>
+                      <SelectItem value="custom:linkedin_profile">LinkedIn Profile</SelectItem>
+                      <SelectItem value="custom:location">Location</SelectItem>
                       <SelectItem value="field:timezone">Timezone</SelectItem>
-                      {campaign.custom_fields.map((field) => <SelectItem key={field} value={`custom:${field}`}>{`{{${field}}}`}</SelectItem>)}
+                      <SelectItem value="custom:auto">Custom Field (use CSV column name)</SelectItem>
+                      {campaign.custom_fields.filter((field) => !["phone_number", "website", "linkedin_profile", "location"].includes(field)).map((field) => <SelectItem key={field} value={`custom:${field}`}>{`{{${field}}}`}</SelectItem>)}
                       {preview?.customCols.filter((field) => !campaign.custom_fields.includes(field)).map((field) => <SelectItem key={field} value={`custom:${field}`}>{`{{${field}}}`} (new custom field)</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -357,6 +362,9 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
                     const field = target.slice(6) as keyof Omit<LeadIn, "custom">;
                     if (field !== "email" && field !== "first_name" && field !== "last_name" && field !== "company" && field !== "title" && field !== "timezone") return;
                     lead[field] = value;
+                  } else if (target === "custom:auto") {
+                    const key = column.label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+                    if (key) lead.custom[key] = value;
                   } else if (target.startsWith("custom:")) {
                     lead.custom[target.slice(7)] = value;
                   }
