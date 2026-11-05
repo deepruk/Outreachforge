@@ -55,9 +55,9 @@ const ALIASES: Record<StdKey, string[]> = {
 };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function toLeads(text: string): { leads: LeadIn[]; invalid: number; customCols: string[] } {
+function toLeads(text: string): { leads: LeadIn[]; invalid: number; customCols: string[]; columns: { label: string; key: string; index: number }[]; sourceRows: string[][]; autoMap: Record<number, string> } {
   const rows = parseCsv(text);
-  if (!rows.length) return { leads: [], invalid: 0, customCols: [] };
+  if (!rows.length) return { leads: [], invalid: 0, customCols: [], columns: [], sourceRows: [], autoMap: {} };
   const header = rows[0].map((h) => h.trim().toLowerCase());
   const idx = Object.fromEntries(
     (Object.keys(ALIASES) as StdKey[]).map((k) => [k, header.findIndex((h) => ALIASES[k].includes(h))]),
@@ -66,7 +66,7 @@ function toLeads(text: string): { leads: LeadIn[]; invalid: number; customCols: 
   if (idx.email < 0) {
     // no header row — find the column that looks like an email
     const col = rows[0].findIndex((c) => EMAIL_RE.test(c.trim()));
-    if (col < 0) return { leads: [], invalid: rows.length, customCols: [] };
+    if (col < 0) return { leads: [], invalid: rows.length, customCols: [], columns: [], sourceRows: [], autoMap: {} };
     idx.email = col;
     body = rows;
   }
@@ -87,7 +87,16 @@ function toLeads(text: string): { leads: LeadIn[]; invalid: number; customCols: 
     for (const c of customCols) if ((r[c.i] ?? "").trim()) custom[c.h] = r[c.i].trim();
     leads.push({ email, first_name: first, last_name: last, company: g("company"), title: g("title"), timezone: g("timezone"), custom });
   }
-  return { leads, invalid, customCols: customCols.map((c) => c.h) };
+  const sourceHeaders = body === rows ? rows[0].map((_, i) => `Column ${i + 1}`) : rows[0].map((h) => h.trim() || `Column ${rows[0].indexOf(h) + 1}`);
+  const columns = sourceHeaders.map((label, index) => ({
+    label,
+    key: `${index}:${label.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`,
+    index,
+  }));
+  const autoMap: Record<number, string> = {};
+  (Object.keys(idx) as StdKey[]).forEach((key) => { if (idx[key] >= 0) autoMap[idx[key]] = `field:${key}`; });
+  for (const col of customCols) autoMap[col.i] = `custom:${col.h}`;
+  return { leads, invalid, customCols: customCols.map((c) => c.h), columns, sourceRows: body, autoMap };
 }
 
 // ---------------- Leads tab ----------------
@@ -95,7 +104,8 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
-  const [preview, setPreview] = useState<{ leads: LeadIn[]; invalid: number; customCols: string[]; file: string } | null>(null);
+  const [preview, setPreview] = useState<{ leads: LeadIn[]; invalid: number; customCols: string[]; file: string; columns: { label: string; key: string; index: number }[]; sourceRows: string[][]; autoMap: Record<number, string> } | null>(null);
+  const [columnMapping, setColumnMapping] = useState<Record<number, string>>({});
   const [drag, setDrag] = useState(false);
   const [manual, setManual] = useState(false);
   const [one, setOne] = useState<LeadIn>({ email: "", first_name: "", last_name: "", company: "", title: "", timezone: "", custom: {} });
@@ -136,7 +146,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
     const text = await f.text();
     const parsed = toLeads(text);
     if (!parsed.leads.length) toast.error("No valid emails found — make sure the CSV has an 'email' column");
-    else setPreview({ ...parsed, file: f.name });
+    else { setPreview({ ...parsed, file: f.name }); setColumnMapping(parsed.autoMap); }
   };
   const onFile = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -280,6 +290,37 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
               From <span className="font-mono">{preview?.file}</span>{preview?.invalid ? ` · ${preview.invalid} rows skipped (invalid email)` : ""}. Duplicates and unsubscribed contacts are handled automatically.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-2 rounded-lg border border-border p-3">
+            <div>
+              <p className="text-sm font-semibold">Map your fields</p>
+              <p className="text-xs text-muted-foreground">Choose which Rohence Flow field each CSV column should populate. Unmapped columns are ignored.</p>
+            </div>
+            <div className="max-h-56 space-y-2 overflow-y-auto">
+              {preview?.columns.map((column) => (
+                <div key={column.key} className="grid grid-cols-1 items-center gap-2 rounded-md bg-muted/30 p-2 sm:grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)]">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium">{column.label}</p>
+                    <p className="truncate text-[10px] text-muted-foreground">CSV column</p>
+                  </div>
+                  <span className="hidden text-center text-muted-foreground sm:block">→</span>
+                  <Select value={columnMapping[column.index] ?? "__ignore__"} onValueChange={(value) => setColumnMapping((current) => ({ ...current, [column.index]: value }))}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__ignore__">Don't import</SelectItem>
+                      <SelectItem value="field:email">Email</SelectItem>
+                      <SelectItem value="field:first_name">First name</SelectItem>
+                      <SelectItem value="field:last_name">Last name</SelectItem>
+                      <SelectItem value="field:company">Company</SelectItem>
+                      <SelectItem value="field:title">Job title</SelectItem>
+                      <SelectItem value="field:timezone">Timezone</SelectItem>
+                      {campaign.custom_fields.map((field) => <SelectItem key={field} value={`custom:${field}`}>{`{{${field}}}`}</SelectItem>)}
+                      {preview?.customCols.filter((field) => !campaign.custom_fields.includes(field)).map((field) => <SelectItem key={field} value={`custom:${field}`}>{`{{${field}}}`} (new custom field)</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="max-h-72 overflow-auto rounded-lg border border-border scroll-thin">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-muted text-left text-muted-foreground">
@@ -304,7 +345,26 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setPreview(null)} data-testid="csv-preview-cancel">Cancel</Button>
-            <Button onClick={() => preview && imp.mutate(preview.leads)} disabled={imp.isPending} data-testid="csv-import-confirm">
+            <Button onClick={() => {
+              if (!preview) return;
+              const mappedLeads: LeadIn[] = preview.sourceRows.flatMap((row) => {
+                const lead: LeadIn = { email: "", first_name: "", last_name: "", company: "", title: "", timezone: "", custom: {} };
+                preview.columns.forEach((column) => {
+                  const target = columnMapping[column.index];
+                  const value = (row[column.index] ?? "").trim();
+                  if (!target || target === "__ignore__" || !value) return;
+                  if (target.startsWith("field:")) {
+                    const field = target.slice(6) as keyof Omit<LeadIn, "custom">;
+                    if (field !== "email" && field !== "first_name" && field !== "last_name" && field !== "company" && field !== "title" && field !== "timezone") return;
+                    lead[field] = value;
+                  } else if (target.startsWith("custom:")) {
+                    lead.custom[target.slice(7)] = value;
+                  }
+                });
+                return EMAIL_RE.test(lead.email) ? [lead] : [];
+              });
+              imp.mutate(mappedLeads);
+            } disabled={imp.isPending} data-testid="csv-import-confirm">
               {imp.isPending && <Loader2 className="size-4 animate-spin" />} Import leads
             </Button>
           </DialogFooter>
