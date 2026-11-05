@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 // ---------------- CSV ----------------
@@ -1201,6 +1202,7 @@ const tzLabel = (z: string) => (z === "UTC" ? "UTC" : z.split("/").pop()!.replac
 export function SettingsTab({ campaign }: { campaign: Campaign }) {
   const qc = useQueryClient();
   const [timezoneSearch, setTimezoneSearch] = useState("");
+  const [timezoneOpen, setTimezoneOpen] = useState(false);
   const senders = useQuery({ queryKey: ["senders"], queryFn: () => apiGet<Sender[]>("/senders") });
   const [s, setS] = useState({
     name: campaign.name, sender_ids: campaign.sender_ids, daily_limit: campaign.daily_limit,
@@ -1330,25 +1332,34 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
             </div>
             <div className="space-y-1.5">
               <Label>Campaign timezone</Label>
-              <Input
-                value={timezoneSearch}
-                onChange={(e) => setTimezoneSearch(e.target.value)}
-                placeholder="Search time zones (e.g. New York, America/Phoenix)…"
-                aria-label="Search campaign time zones"
-                data-testid="settings-timezone-search"
-              />
-              <Select value={s.timezone} onValueChange={(v: string) => { setS({ ...s, timezone: v }); setTimezoneSearch(""); }}>
-                <SelectTrigger className="w-full" data-testid="settings-timezone-select"><SelectValue>{(v) => tzLabel(v as string)}</SelectValue></SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {TIMEZONES.filter((z) => {
-                    const q = timezoneSearch.trim().toLowerCase();
-                    return !q || z.toLowerCase().includes(q) || tzLabel(z).toLowerCase().includes(q);
-                  }).map((z) => <SelectItem key={z} value={z}>{tzLabel(z)}</SelectItem>)}
-                  {TIMEZONES.every((z) => !z.toLowerCase().includes(timezoneSearch.trim().toLowerCase()) && !tzLabel(z).toLowerCase().includes(timezoneSearch.trim().toLowerCase())) && (
-                    <div className="px-2 py-4 text-center text-xs text-muted-foreground">No matching time zones</div>
-                  )}
-                </SelectContent>
-              </Select>
+              <Popover open={timezoneOpen} onOpenChange={(open) => { setTimezoneOpen(open); if (!open) setTimezoneSearch(""); }}>
+                <PopoverTrigger className="flex h-9 w-full items-center justify-between rounded-lg border border-input bg-input/30 px-3 text-left text-sm hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="settings-timezone-select">
+                  <span className="truncate">{tzLabel(s.timezone || "UTC")}</span>
+                  <span className="ml-2 text-muted-foreground">⌄</span>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-[var(--anchor-width)] min-w-72 p-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input autoFocus value={timezoneSearch} onChange={(e) => setTimezoneSearch(e.target.value)} placeholder="Search timezone or city…" aria-label="Search campaign time zones" data-testid="settings-timezone-search" className="pl-8" />
+                  </div>
+                  <div className="max-h-64 overflow-y-auto overscroll-contain">
+                    {TIMEZONES.filter((z) => {
+                      const q = timezoneSearch.trim().toLowerCase();
+                      return !q || z.toLowerCase().includes(q) || tzLabel(z).toLowerCase().includes(q);
+                    }).map((z) => (
+                      <button key={z} type="button" onClick={() => { setS({ ...s, timezone: z }); setTimezoneSearch(""); setTimezoneOpen(false); }}
+                        className={cn("flex w-full items-center rounded-md px-2.5 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground", s.timezone === z && "bg-accent/60 text-accent-foreground")}>
+                        {tzLabel(z)}
+                        {s.timezone === z && <span className="ml-auto text-xs">✓</span>}
+                      </button>
+                    ))}
+                    {TIMEZONES.every((z) => {
+                      const q = timezoneSearch.trim().toLowerCase();
+                      return q && !z.toLowerCase().includes(q) && !tzLabel(z).toLowerCase().includes(q);
+                    }) && <p className="px-2 py-4 text-center text-xs text-muted-foreground">No matching time zones</p>}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-border bg-background p-4">
               <div>
