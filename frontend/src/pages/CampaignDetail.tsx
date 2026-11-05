@@ -43,9 +43,10 @@ function LiveBar({ campaign }: { campaign: Campaign }) {
       next = hours ? `${days}d ${hours}h` : `${days}d`;
     }
     if (campaign.use_lead_timezone) {
-      // The next queued send may belong to any lead in a different timezone.
-      // A single campaign-level clock label would be misleading here.
-      nextSub = "Next window: Each lead's local time · fallback: campaign timezone";
+      // Keep the scheduler's reason visible; never imply one clock time for all leads.
+      nextSub = d.next_note
+        ? `${d.next_note} · lead's local time`
+        : "Each lead's local time · fallback: campaign timezone";
     } else if (!nextSub) {
       try {
         nextSub = `Next window: ${new Date(d.next_email_at).toLocaleTimeString(undefined, {
