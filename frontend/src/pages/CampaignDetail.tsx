@@ -42,11 +42,15 @@ function LiveBar({ campaign }: { campaign: Campaign }) {
       const hours = Math.floor((minutes % (24 * 60)) / 60);
       next = hours ? `${days}d ${hours}h` : `${days}d`;
     }
-    if (!nextSub) {
+    if (campaign.use_lead_timezone) {
+      // The next queued send may belong to any lead in a different timezone.
+      // A single campaign-level clock label would be misleading here.
+      nextSub = "Next window: Each lead's local time · fallback: campaign timezone";
+    } else if (!nextSub) {
       try {
         nextSub = `Next window: ${new Date(d.next_email_at).toLocaleTimeString(undefined, {
-          hour: "numeric", minute: "2-digit", timeZone: campaign.timezone || undefined,
-        })}${campaign.timezone ? ` · ${campaign.timezone}` : ""}`;
+          hour: "numeric", minute: "2-digit", timeZone: campaign.timezone || "UTC",
+        })} · ${campaign.timezone || "UTC"}`;
       } catch {
         nextSub = new Date(d.next_email_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
       }
