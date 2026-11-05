@@ -296,7 +296,8 @@ async def campaign_live(cid: str, user: dict = Depends(current_user)):
                     out.next_email_at = candidate
                     break
         else:
-            earliest = max(lead_at, min(free), n)
+            inbox_ready_at = min(free)
+            earliest = max(lead_at, inbox_ready_at, n)
             if due and not in_send_window(c, due):
                 # Report the next allowed sending-window start instead of "now",
                 # which made the UI display "Any moment" while sends were blocked.
@@ -319,7 +320,14 @@ async def campaign_live(cid: str, user: dict = Depends(current_user)):
                     break
                 if window_start is not None:
                     earliest = max(earliest, window_start)
-                out.next_note = "Waiting for the sending window"
+                out.next_note = "Waiting for the lead's local sending window" if c.get("use_lead_timezone") and due.get("timezone") else "Waiting for the sending window"
+            elif lead_at > max(inbox_ready_at, n):
+                out.next_note = "Waiting for the next follow-up"
+            elif inbox_ready_at > max(lead_at, n):
+                cooldown_minutes = max(1, int((inbox_ready_at - n).total_seconds() // 60) + 1)
+                out.next_note = f"Inbox cooldown: about {cooldown_minutes} min"
+            else:
+                out.next_note = "Ready to send"
             out.next_email_at = earliest
     return out
 
