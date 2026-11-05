@@ -372,7 +372,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
                 return EMAIL_RE.test(lead.email) ? [lead] : [];
               });
               imp.mutate(mappedLeads);
-            } disabled={imp.isPending} data-testid="csv-import-confirm">
+            }} disabled={imp.isPending} data-testid="csv-import-confirm">
               {imp.isPending && <Loader2 className="size-4 animate-spin" />} Import leads
             </Button>
           </DialogFooter>
