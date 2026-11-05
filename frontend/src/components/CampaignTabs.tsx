@@ -1174,11 +1174,28 @@ export function SequenceTab({ campaign }: { campaign: Campaign }) {
 // ---------------- Settings tab ----------------
 const HOURS = Array.from({ length: 25 }, (_, i) => i);
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const TIMEZONES = [
-  "UTC", "America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "America/Toronto", "America/Sao_Paulo",
-  "Europe/London", "Europe/Dublin", "Europe/Paris", "Europe/Berlin", "Europe/Madrid", "Europe/Amsterdam", "Europe/Stockholm",
-  "Africa/Johannesburg", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore", "Asia/Hong_Kong", "Asia/Tokyo", "Australia/Sydney", "Pacific/Auckland",
+// Build the picker from the browser's complete IANA time-zone database rather
+// than maintaining a short hand-picked list. Keep common IANA links/legacy IDs too:
+// they are valid values often found in imported lead lists and existing campaigns.
+const LEGACY_TIMEZONES = [
+  "America/Vancouver", "America/Edmonton", "America/Phoenix", "America/Halifax",
+  "America/Montreal", "America/Winnipeg", "America/Regina", "America/St_Johns",
+  "US/Pacific", "US/Mountain", "US/Central", "US/Eastern",
 ];
+const SUPPORTED_IANA_TIMEZONES = typeof Intl.supportedValuesOf === "function"
+  ? Intl.supportedValuesOf("timeZone")
+  : [];
+const TIMEZONES = Array.from(new Set([
+  "UTC",
+  ...SUPPORTED_IANA_TIMEZONES,
+  ...LEGACY_TIMEZONES,
+  "America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York",
+  "America/Toronto", "America/Sao_Paulo", "Europe/London", "Europe/Dublin",
+  "Europe/Paris", "Europe/Berlin", "Europe/Madrid", "Europe/Amsterdam",
+  "Europe/Stockholm", "Africa/Johannesburg", "Asia/Dubai", "Asia/Kolkata",
+  "Asia/Singapore", "Asia/Hong_Kong", "Asia/Tokyo", "Australia/Sydney",
+  "Pacific/Auckland",
+])).sort((a, b) => a.localeCompare(b));
 const tzLabel = (z: string) => (z === "UTC" ? "UTC" : z.split("/").pop()!.replace(/_/g, " ") + ` (${z})`);
 
 export function SettingsTab({ campaign }: { campaign: Campaign }) {
