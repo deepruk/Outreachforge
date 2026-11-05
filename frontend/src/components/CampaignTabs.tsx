@@ -1200,6 +1200,7 @@ const tzLabel = (z: string) => (z === "UTC" ? "UTC" : z.split("/").pop()!.replac
 
 export function SettingsTab({ campaign }: { campaign: Campaign }) {
   const qc = useQueryClient();
+  const [timezoneSearch, setTimezoneSearch] = useState("");
   const senders = useQuery({ queryKey: ["senders"], queryFn: () => apiGet<Sender[]>("/senders") });
   const [s, setS] = useState({
     name: campaign.name, sender_ids: campaign.sender_ids, daily_limit: campaign.daily_limit,
@@ -1329,9 +1330,24 @@ export function SettingsTab({ campaign }: { campaign: Campaign }) {
             </div>
             <div className="space-y-1.5">
               <Label>Campaign timezone</Label>
-              <Select value={s.timezone} onValueChange={(v: string) => setS({ ...s, timezone: v })}>
+              <Input
+                value={timezoneSearch}
+                onChange={(e) => setTimezoneSearch(e.target.value)}
+                placeholder="Search time zones (e.g. New York, America/Phoenix)…"
+                aria-label="Search campaign time zones"
+                data-testid="settings-timezone-search"
+              />
+              <Select value={s.timezone} onValueChange={(v: string) => { setS({ ...s, timezone: v }); setTimezoneSearch(""); }}>
                 <SelectTrigger className="w-full" data-testid="settings-timezone-select"><SelectValue>{(v) => tzLabel(v as string)}</SelectValue></SelectTrigger>
-                <SelectContent className="max-h-72">{TIMEZONES.map((z) => <SelectItem key={z} value={z}>{tzLabel(z)}</SelectItem>)}</SelectContent>
+                <SelectContent className="max-h-72">
+                  {TIMEZONES.filter((z) => {
+                    const q = timezoneSearch.trim().toLowerCase();
+                    return !q || z.toLowerCase().includes(q) || tzLabel(z).toLowerCase().includes(q);
+                  }).map((z) => <SelectItem key={z} value={z}>{tzLabel(z)}</SelectItem>)}
+                  {TIMEZONES.every((z) => !z.toLowerCase().includes(timezoneSearch.trim().toLowerCase()) && !tzLabel(z).toLowerCase().includes(timezoneSearch.trim().toLowerCase())) && (
+                    <div className="px-2 py-4 text-center text-xs text-muted-foreground">No matching time zones</div>
+                  )}
+                </SelectContent>
               </Select>
             </div>
             <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-border bg-background p-4">
