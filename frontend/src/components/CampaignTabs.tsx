@@ -363,8 +363,10 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
                     if (field !== "email" && field !== "first_name" && field !== "last_name" && field !== "company" && field !== "title" && field !== "timezone") return;
                     lead[field] = value;
                   } else if (target === "custom:auto") {
-                    const key = column.label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-                    if (key) lead.custom[key] = value;
+                    const key = column.label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+                    if (key.length > 0) {
+                      lead.custom[key] = value;
+                    }
                   } else if (target.startsWith("custom:")) {
                     lead.custom[target.slice(7)] = value;
                   }
