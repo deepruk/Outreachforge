@@ -177,7 +177,8 @@ async def send_campaign_test_email(cid: str, body: CampaignTestEmailIn, user: di
         raise HTTPException(status_code=400, detail="Add an email body before sending a test email")
 
     html_body = mailer.build_html(
-        rendered_body, f"test-{new_id()}", "", False, False, preheader=body.preheader
+        rendered_body, f"test-{new_id()}", "", False, False,
+        preheader=mailer.spin(mailer.render_vars(body.preheader or "", lead))
     )
     try:
         await asyncio.to_thread(
