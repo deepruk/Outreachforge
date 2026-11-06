@@ -268,7 +268,8 @@ async def process_campaign(c: dict) -> None:
             # Plain-text-only mode disables all tracking — no pixel, raw URLs.
             track_opens = False
             track_clicks = False
-        html = mailer.build_html(body, mid, base_url(), track_opens, track_clicks, preheader=step.get("preheader", ""))
+        preheader = mailer.spin(mailer.render_vars(step.get("preheader") or "", lead))
+        html = mailer.build_html(body, mid, base_url(), track_opens, track_clicks, preheader=preheader)
         try:
             header_id = await deliver(sender, lead["email"], subject, html, body,
                                       first["message_id_header"] if first else None,
