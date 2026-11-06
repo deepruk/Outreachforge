@@ -31,10 +31,17 @@ const clock = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hou
 export default function ActivityLog() {
   const [campaign, setCampaign] = useState("all");
   const nowMs = useNow();
-  const camps = useQuery({ queryKey: ["campaigns"], queryFn: () => apiGet<Campaign[]>("/campaigns") });
+  const camps = useQuery({
+    queryKey: ["campaigns"],
+    queryFn: () => apiGet<Campaign[]>("/campaigns"),
+    staleTime: 30000,
+  });
   const q = useQuery({
     queryKey: ["activity", campaign],
     queryFn: () => apiGet<ActivityData>(`/activity?limit=100${campaign !== "all" ? `&campaign_id=${campaign}` : ""}`),
+    // Reuse a recent result immediately when navigating back, while keeping
+    // the live feed fresh in the background every 10 seconds.
+    staleTime: 8000,
     refetchInterval: 10000,
   });
   const d = q.isError ? undefined : q.data;
