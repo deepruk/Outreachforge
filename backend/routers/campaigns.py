@@ -336,10 +336,17 @@ async def campaign_live(cid: str, user: dict = Depends(current_user)):
 # ---------- leads ----------
 # Engagement pseudo-statuses: "opened" and "clicked" don't live on the lead doc —
 # they're derived from the messages collection. We treat them as filters, not stored statuses.
-_ENGAGEMENT_STATUSES = {"opened", "clicked"}
+_ENGAGEMENT_STATUSES = {"opened", "clicked", "replied"}
 
 
 async def _engagement_lead_ids(campaign_id: str, kind: str) -> list[str]:
+    if kind == "replied":
+        # Reply engagement is based on the actual inbound-reply timestamp,
+        # not the lead status (which depends on the campaign's stop_on_reply setting).
+        return await db.messages.distinct("lead_id", {
+            "campaign_id": campaign_id,
+            "replied_at": {"$ne": None},
+        })
     key = "opened_at" if kind == "opened" else "clicked_at"
     cnt = "open_count" if kind == "opened" else "click_count"
     return await db.messages.distinct("lead_id", {
