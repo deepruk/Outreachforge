@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Eye, MessageSquareReply, MousePointerClick, Send, ShieldAlert, Users } from "lucide-react";
+import { Eye, MessageSquareReply, MousePointerClick, Send, ShieldAlert, Users, Repeat2 } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import type { Analytics as AnalyticsData } from "@/lib/types";
 import { CAMPAIGN_STATUS, fmt, pctFmt } from "@/lib/format";
@@ -44,9 +44,10 @@ export default function Analytics() {
           </div>
         }
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-7">
         <StatCard testId="analytics-kpi-sent" label="Sent" value={v(t?.sent)} icon={Send} />
         <StatCard testId="analytics-kpi-leads" label="Total leads" value={v(t?.leads)} icon={Users} />
+        <StatCard testId="analytics-kpi-followups" label="Follow-ups sent" value={v(t?.followups_sent)} icon={Repeat2} sub="Emails after the first step" />
         <StatCard testId="analytics-kpi-open-rate" label="Open rate" value={t ? pctFmt(t.open_rate) : "—"} icon={Eye} sub={`${v(t?.opened)} opens`} />
         <StatCard testId="analytics-kpi-click-rate" label="Click rate" value={t ? pctFmt(t.click_rate) : "—"} icon={MousePointerClick} accent="text-amber-300" sub={`${v(t?.clicked)} clicks`} />
         <StatCard testId="analytics-kpi-reply-rate" label="Reply rate" value={t ? pctFmt(t.reply_rate) : "—"} icon={MessageSquareReply} accent="text-emerald-300" sub={`${v(t?.replied)} replies`} />
