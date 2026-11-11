@@ -163,6 +163,7 @@ class StatTotals(BaseModel):
     leads: int = 0
     contacted: int = 0
     sent: int = 0
+    followups_sent: int = 0
     opened: int = 0
     clicked: int = 0
     replied: int = 0
