@@ -313,6 +313,9 @@ export default function SenderAccounts() {
   const setOpen = (v: boolean) => { setOpenRaw(v); if (!v && params.get("connect")) setParams({}); };
   const [testRes, setTestRes] = useState<{ id: string; r: ConnectionTest } | null>(null);
   const [editing, setEditing] = useState<Sender | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkDailyLimit, setBulkDailyLimit] = useState(40);
   const senders = useQuery({ queryKey: ["senders"], queryFn: () => apiGet<Sender[]>("/senders"), staleTime: 10_000, refetchOnWindowFocus: false });
   const inv = () => qc.invalidateQueries({ queryKey: ["senders"] });
   useEffect(() => {
@@ -348,6 +351,16 @@ export default function SenderAccounts() {
     onSuccess: (r, id) => { setTestRes({ id, r }); inv(); },
     onError: (e) => toast.error(errMsg(e)),
   });
+  const bulkSave = useMutation({
+    mutationFn: async () => Promise.all(selectedIds.map((id) => apiPatch<Sender>(`/senders/${id}`, { daily_limit: bulkDailyLimit }))),
+    onSuccess: () => {
+      inv();
+      toast.success(`Daily limit updated for ${selectedIds.length} inboxes`);
+      setSelectedIds([]);
+      setBulkEditOpen(false);
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
   const list = senders.isError ? [] : senders.data ?? [];
   const cap = list.reduce((a, s) => a + s.effective_limit, 0);
   const today = list.reduce((a, s) => a + s.sent_today, 0);
@@ -358,7 +371,7 @@ export default function SenderAccounts() {
       <PageHeader
         title="Sender Accounts"
         subtitle="The inboxes your campaigns send from and sync replies into."
-        actions={<Button onClick={() => setOpen(true)} data-testid="add-sender-button"><Plus className="size-4" /> Connect inbox</Button>}
+        actions={<div className="flex flex-wrap gap-2">{selectedIds.length > 0 && <Button variant="outline" onClick={() => { setBulkDailyLimit(list.find((s) => selectedIds.includes(s.id))?.daily_limit ?? 40); setBulkEditOpen(true); }} data-testid="bulk-edit-senders-button"><SlidersHorizontal className="size-4" /> Edit {selectedIds.length} selected</Button>}<Button onClick={() => setOpen(true)} data-testid="add-sender-button"><Plus className="size-4" /> Connect inbox</Button></div>}
       />
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard testId="senders-kpi-total" label="Connected inboxes" value={fmt(list.length)} icon={Server} />
@@ -378,6 +391,7 @@ export default function SenderAccounts() {
             <table className="w-full text-sm" data-testid="senders-table">
               <thead className="bg-background/40 text-left text-[11px] uppercase tracking-[0.07em] text-muted-foreground">
                 <tr className="border-b border-border">
+                  <th className="w-10 px-3 py-3"><input type="checkbox" aria-label="Select all inboxes" checked={list.length > 0 && selectedIds.length === list.length} onChange={(e) => setSelectedIds(e.target.checked ? list.map((s) => s.id) : [])} data-testid="select-all-senders" /></th>
                   <th className="px-5 py-3 font-semibold">Inbox</th>
                   <th className="px-3 py-3 font-semibold">Vendor</th>
                   <th className="px-3 py-3 font-semibold">Daily limit</th>
@@ -395,6 +409,7 @@ export default function SenderAccounts() {
                   const used = Math.min(100, (s.sent_today / Math.max(1, s.effective_limit)) * 100);
                   return (
                     <tr key={s.id} className="group border-b border-border/60 transition-colors hover:bg-foreground/[0.03] animate-fade-up" style={{ animationDelay: `${Math.min(i, 10) * 35}ms` }} data-testid={`sender-row-${s.id}`}>
+                      <td className="px-3 py-3"><input type="checkbox" aria-label={`Select ${s.email}`} checked={selectedIds.includes(s.id)} onChange={(e) => setSelectedIds((prev) => e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id))} data-testid={`select-sender-${s.id}`} /></td>
                       <td className="px-5 py-3">
                         <p className="font-medium text-foreground">{s.from_name || s.email.split("@")[0]}</p>
                         <p className="truncate font-mono text-xs text-muted-foreground">{s.email}</p>
@@ -502,6 +517,22 @@ export default function SenderAccounts() {
           </div>
         </div>
       </div>
+      <Dialog open={bulkEditOpen} onOpenChange={setBulkEditOpen}>
+        <DialogContent className="sm:max-w-md" data-testid="bulk-edit-senders-dialog">
+          <DialogHeader>
+            <DialogTitle>Edit sender limits in bulk</DialogTitle>
+            <DialogDescription>Set the same daily sending limit for {selectedIds.length} selected inboxes. Other inbox settings will remain unchanged.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <Label>Daily sending limit per inbox</Label>
+            <Input type="number" min={1} max={2000} value={bulkDailyLimit} onChange={(e) => setBulkDailyLimit(Math.min(2000, Math.max(1, Number(e.target.value) || 1)))} data-testid="bulk-sender-daily-limit-input" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkEditOpen(false)}>Cancel</Button>
+            <Button onClick={() => bulkSave.mutate()} disabled={bulkSave.isPending || selectedIds.length === 0} data-testid="bulk-sender-save">{bulkSave.isPending && <Loader2 className="size-4 animate-spin" />}Apply to {selectedIds.length} inboxes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <AddSenderDialog open={open} onOpenChange={setOpen} />
       <EditLimitsDialog sender={editing} onClose={() => setEditing(null)} />
     </AppShell>
