@@ -121,6 +121,7 @@ export interface StatTotals {
   leads: number;
   contacted: number;
   sent: number;
+  followups_sent: number;
   opened: number;
   clicked: number;
   replied: number;
