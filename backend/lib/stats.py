@@ -17,8 +17,9 @@ def totals_from(msgs: list[dict], leads: int) -> dict:
     bounced = len({m["lead_id"] for m in msgs if m.get("bounced")})
     unsubscribed = len({m["lead_id"] for m in msgs if m.get("unsubscribed")})
     contacted = len(lead_ids)
+    followups_sent = sum(1 for m in msgs if (m.get("step_index") or 0) > 0)
     return {
-        "leads": leads, "contacted": contacted, "sent": sent, "opened": opened, "clicked": clicked,
+        "leads": leads, "contacted": contacted, "sent": sent, "followups_sent": followups_sent, "opened": opened, "clicked": clicked,
         "replied": replied, "bounced": bounced, "unsubscribed": unsubscribed,
         "open_rate": pct(opened, contacted), "click_rate": pct(clicked, contacted),
         "reply_rate": pct(replied, contacted), "bounce_rate": pct(bounced, contacted),
