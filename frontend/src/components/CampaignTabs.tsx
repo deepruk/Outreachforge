@@ -212,6 +212,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
                 {Object.entries(LEAD_STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
                 <SelectItem value="opened" data-testid="lead-status-opened">Opened</SelectItem>
                 <SelectItem value="clicked" data-testid="lead-status-clicked">Clicked</SelectItem>
+                <SelectItem value="replied" data-testid="lead-status-replied">Replied</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline" size="sm" onClick={() => { window.location.assign(`/api/campaigns/${campaign.id}/leads/export`); }} data-testid="leads-export-button">
