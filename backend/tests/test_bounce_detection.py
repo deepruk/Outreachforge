@@ -29,3 +29,17 @@ def test_gmail_address_not_found_bounce_extracts_recipient():
         "because the address couldn't be found or is unable to receive email."
     )
     assert BOUNCE_NARRATIVE_RE.findall(body) == ["rebecca@paredes-marketing.com"]
+
+
+def test_gmail_address_not_found_bounce_extracts_recipient():
+    body = (
+        "Address not found\\n"
+        "Your message wasn't delivered to rebecca@paredes-marketing.com "
+        "because the address couldn't be found or is unable to receive email."
+    )
+    assert BOUNCE_NARRATIVE_RE.findall(body) == ["rebecca@paredes-marketing.com"]
+
+
+def test_extended_dsn_recipient_headers_are_detected():
+    body = "Original-Rcpt-To: rfc822; failed@example.com\\nAction: failed"
+    assert DSN_RECIPIENT_RE.findall(body) == ["failed@example.com"]
