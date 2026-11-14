@@ -20,3 +20,12 @@ def test_standard_dsn_extracts_final_recipient():
 def test_narrative_parser_handles_angle_brackets_and_case():
     body = "Your message to <Stephen.McCranor@Frame.Agency> could not be delivered."
     assert BOUNCE_NARRATIVE_RE.findall(body) == ["Stephen.McCranor@Frame.Agency"]
+
+
+def test_gmail_address_not_found_bounce_extracts_recipient():
+    body = (
+        "Address not found\\n"
+        "Your message wasn't delivered to rebecca@paredes-marketing.com "
+        "because the address couldn't be found or is unable to receive email."
+    )
+    assert BOUNCE_NARRATIVE_RE.findall(body) == ["rebecca@paredes-marketing.com"]
