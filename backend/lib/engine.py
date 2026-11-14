@@ -47,7 +47,7 @@ async def notify_hot_reply(user_id: str, thread_id: str, label: str, contact_nam
     })
 BOUNCE_FROM = ("mailer-daemon", "postmaster")
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
-DSN_RECIPIENT_RE = re.compile(r"(?im)^\\s*(?:Final-Recipient|Original-Recipient|X-Failed-Recipients|Failed-Recipient|Original-Rcpt-To|X-Original-To)\\s*:\\s*(?:rfc822\\s*;\\s*)?([^\\s;<>]+@[^\\s;<>]+)")
+DSN_RECIPIENT_RE = re.compile(r"(?im)^\s*(?:Final-Recipient|Original-Recipient|X-Failed-Recipients|Failed-Recipient|Original-Rcpt-To|X-Original-To)\s*:\s*(?:rfc822\s*;\s*)?([^\s;<>]+@[^\s;<>]+)")
 BOUNCE_NARRATIVE_RE = re.compile(
     r"(?i)(?:your message to|your message (?:wasn't|was not) delivered to|"
     r"message to|email to|delivery to|"
