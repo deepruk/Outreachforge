@@ -49,10 +49,11 @@ BOUNCE_FROM = ("mailer-daemon", "postmaster")
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 DSN_RECIPIENT_RE = re.compile(r"(?im)^\s*(?:Final-Recipient|Original-Recipient|X-Failed-Recipients|Failed-Recipient)\s*:\s*(?:rfc822\s*;\s*)?([^\s;<>]+@[^\s;<>]+)")
 BOUNCE_NARRATIVE_RE = re.compile(
-    r"(?i)(?:your message to|message to|email to|delivery to|"
+    r"(?i)(?:your message to|your message (?:wasn't|was not) delivered to|"
+    r"message to|email to|delivery to|"
     r"could not be delivered to|couldn't be delivered to|was not delivered to|"
-    r"failed to deliver to|undeliverable to|recipient address(?:\s+\S+){0,3}?)"
-    r"\s*[<\"']?([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})",
+    r"failed to deliver to|undeliverable to|recipient address(?:\\s+\\S+){0,3}?)"
+    r"\\s*[<\"']?([A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,})",
 )
 AB_MIN_SENDS = int(os.environ.get("AB_MIN_SENDS", "20"))  # per variant before a winner is picked
 UNSUB_FOOTER = "\n\n--\nNot interested? Unsubscribe here: {url}"
