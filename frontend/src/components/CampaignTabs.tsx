@@ -159,7 +159,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
     const f = e.dataTransfer.files?.[0];
     if (f) void readFile(f);
   };
-  const rows = leads.isError ? [] : leads.data ?? [];
+  const rows = leads.data ?? [];
   const allVisibleSelected = rows.length > 0 && rows.every((lead) => selectedLeadIds.includes(lead.id));
   const toggleLead = (id: string, checked: boolean) => setSelectedLeadIds((current) => checked ? (current.includes(id) ? current : [...current, id]) : current.filter((value) => value !== id));
   const toggleVisible = (checked: boolean) => setSelectedLeadIds((current) => checked ? Array.from(new Set([...current, ...rows.map((lead) => lead.id)])) : current.filter((id) => !rows.some((lead) => lead.id === id)));
@@ -223,6 +223,15 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
         testId="leads-panel"
       >
         <div className="max-h-[560px] overflow-auto scroll-thin">
+          {leads.isLoading ? (
+            <div className="px-5 py-12 text-center text-sm text-muted-foreground" data-testid="leads-loading">Loading leads…</div>
+          ) : leads.isError ? (
+            <div className="flex flex-col items-center gap-3 px-5 py-12 text-center" data-testid="leads-load-error">
+              <p className="text-sm font-medium text-red-300">We couldn't load this campaign's leads.</p>
+              <p className="max-w-xl text-xs text-muted-foreground">{errMsg(leads.error)}</p>
+              <Button variant="outline" size="sm" onClick={() => leads.refetch()} data-testid="leads-retry">Retry loading leads</Button>
+            </div>
+          ) : (
           <table className="w-full text-sm" data-testid="leads-table">
             <thead className="sticky top-0 bg-panel text-left text-[11px] uppercase tracking-[0.07em] text-muted-foreground">
               <tr className="border-b border-border">
@@ -280,6 +289,7 @@ export function LeadsTab({ campaign }: { campaign: Campaign }) {
               )}
             </tbody>
           </table>
+          )}
         </div>
       </Panel>
 
