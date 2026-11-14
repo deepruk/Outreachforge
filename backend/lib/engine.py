@@ -53,7 +53,7 @@ BOUNCE_NARRATIVE_RE = re.compile(
     r"message to|email to|delivery to|"
     r"could not be delivered to|couldn't be delivered to|was not delivered to|"
     r"failed to deliver to|undeliverable to|recipient address(?:\s+\S+){0,3}?)"
-    r"\s*[<\"']?([A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,})",
+    r"\s*[<\"']?([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})",
 )
 AB_MIN_SENDS = int(os.environ.get("AB_MIN_SENDS", "20"))  # per variant before a winner is picked
 UNSUB_FOOTER = "\n\n--\nNot interested? Unsubscribe here: {url}"
