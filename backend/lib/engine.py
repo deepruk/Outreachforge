@@ -166,6 +166,41 @@ def sender_ready(s: dict) -> bool:
     return t is None or t <= now()
 
 
+def prioritize_due_leads(leads: list[dict], followup_priority: int) -> list[dict]:
+    """Order an already-due queue by the configured follow-up share.
+
+    0 means all new leads first; 100 means all follow-ups first.
+    Intermediate values use a stable weighted interleave while preserving
+    FIFO order within each group.
+    """
+    priority = max(0, min(100, int(followup_priority)))
+    followups = [lead for lead in leads if (lead.get("current_step") or 0) > 0]
+    new_leads = [lead for lead in leads if (lead.get("current_step") or 0) == 0]
+    if not followups or not new_leads:
+        return leads
+    if priority == 0:
+        return new_leads + followups
+    if priority == 100:
+        return followups + new_leads
+
+    ordered: list[dict] = []
+    fu_idx = nw_idx = 0
+    while fu_idx < len(followups) or nw_idx < len(new_leads):
+        # At each position, keep the cumulative follow-up share as close
+        # as possible to the configured percentage.
+        target_followups = round((len(ordered) + 1) * priority / 100)
+        if fu_idx < len(followups) and fu_idx < target_followups:
+            ordered.append(followups[fu_idx])
+            fu_idx += 1
+        elif nw_idx < len(new_leads):
+            ordered.append(new_leads[nw_idx])
+            nw_idx += 1
+        elif fu_idx < len(followups):
+            ordered.append(followups[fu_idx])
+            fu_idx += 1
+    return ordered
+
+
 async def process_campaign(c: dict) -> None:
     n = now()
     if c.get("send_days") == []:
@@ -185,27 +220,9 @@ async def process_campaign(c: dict) -> None:
         {"campaign_id": c["id"], "status": {"$in": ["pending", "in_progress"]}, "next_send_at": {"$lte": n}},
         {"_id": 0},
     ).sort("next_send_at", 1).to_list(200)
-    # Follow-up priority biases which bucket drains first: 100 = all follow-ups before new leads,
-    # 0 = all new leads first, 50 = round-robin interleave.
-    priority = max(0, min(100, int(c.get("followup_priority", 50) or 50)))
-    fu = [l for l in leads if (l.get("current_step") or 0) > 0]
-    nw = [l for l in leads if (l.get("current_step") or 0) == 0]
-    if fu and nw and priority not in (50,):
-        ordered: list[dict] = []
-        ifu = inw = 0
-        fu_target = round(len(leads) * priority / 100)
-        nw_target = len(leads) - fu_target
-        while ifu + inw < len(leads):
-            pick_fu = (ifu / max(fu_target, 1)) <= (inw / max(nw_target, 1)) and ifu < len(fu)
-            if pick_fu:
-                ordered.append(fu[ifu]); ifu += 1
-            elif inw < len(nw):
-                ordered.append(nw[inw]); inw += 1
-            elif ifu < len(fu):
-                ordered.append(fu[ifu]); ifu += 1
-            else:
-                break
-        leads = ordered
+    # Apply the configured share to the already-due queue; each bucket remains FIFO.
+    priority = c.get("followup_priority", 50)
+    leads = prioritize_due_leads(leads, priority)
     # Fetch the workspace default signature once per campaign tick; used as a fallback below.
     user = await db.users.find_one({"id": c["user_id"]}, {"_id": 0, "default_signature": 1})
     workspace_signature = ((user or {}).get("default_signature") or "").strip()
