@@ -1,5 +1,6 @@
 """Slack Incoming Webhook delivery for per-user workspace integrations."""
 import logging
+import os
 
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
@@ -10,7 +11,7 @@ log = logging.getLogger(__name__)
 
 
 def _decrypt_webhook(encrypted: str) -> str:
-    key = __import__("os").environ.get("INTEGRATION_ENCRYPTION_KEY", "")
+    key = os.environ.get("INTEGRATION_ENCRYPTION_KEY", "")
     if not key:
         raise RuntimeError("Integration encryption is not configured")
     return Fernet(key.encode()).decrypt(encrypted.encode()).decode()
