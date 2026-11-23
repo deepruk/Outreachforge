@@ -9,8 +9,8 @@ import { Label } from "@/components/ui/label";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { errMsg } from "@/lib/format";
 
-type Provider = "apollo" | "neverbounce" | "zerobounce" | "smartlead" | "instantly" | "google_sheets" | "hubspot" | "calendly";
-type Integration = { id: string; provider: Provider; name: string; category: string; key_hint: string; status: string; created_at: string; last_tested_at: string | null };
+type Provider = "apollo" | "neverbounce" | "zerobounce" | "smartlead" | "instantly" | "google_sheets" | "hubspot" | "calendly" | "slack";
+type Integration = { id: string; provider: Provider; name: string; category: string; key_hint: string; status: string; created_at: string; last_tested_at: string | null; workspace_name?: string | null; channel_name?: string | null };
 type Connector = { id: string; name: string; category: string; description: string; docs?: string; provider?: Provider; comingSoon?: boolean; oauth?: boolean };
 const connectors: Connector[] = [
   { id: "apollo", provider: "apollo", name: "Apollo", category: "Prospecting", description: "Prospect discovery and enrichment", docs: "https://docs.apollo.io/" },
@@ -30,7 +30,7 @@ const connectors: Connector[] = [
   { id: "clay", name: "Clay", category: "Enrichment", description: "Enrich and automate prospect research", comingSoon: true },
   { id: "salesforce", name: "Salesforce", category: "CRM", description: "Connect your sales CRM", comingSoon: true },
   { id: "pipedrive", name: "Pipedrive", category: "CRM", description: "Sync leads and sales activities", comingSoon: true },
-  { id: "slack", name: "Slack", category: "Communication", description: "Get outreach notifications", comingSoon: true },
+  { id: "slack", provider: "slack", name: "Slack", category: "Communication", description: "Send interested replies and booked-meeting alerts to your Slack workspace", oauth: true },
   { id: "zapier", name: "Zapier", category: "Automation", description: "Connect workflows across your tools", comingSoon: true },
   { id: "make", name: "Make", category: "Automation", description: "Build visual workflow automations", comingSoon: true },
   { id: "n8n", name: "n8n", category: "Automation", description: "Connect custom workflow automations", comingSoon: true },
@@ -53,7 +53,7 @@ export default function IntegrationsPanel() {
     onError: (e) => toast.error(errMsg(e, "Could not connect this tool")),
   });
   const test = useMutation({
-    mutationFn: (provider: Provider) => apiPost<{ ok: boolean; message: string }>(`/integrations/${provider}/test`),
+    mutationFn: (provider: Provider) => apiPost<{ ok: boolean; message: string }>(provider === "slack" ? "/integrations/slack/test" : `/integrations/${provider}/test`),
     onSuccess: async (result) => { await qc.invalidateQueries({ queryKey: ["integrations"] }); result.ok ? toast.success(result.message) : toast.error(result.message); },
     onError: (e) => toast.error(errMsg(e, "Connection test failed")),
   });
@@ -116,11 +116,11 @@ export default function IntegrationsPanel() {
                     : <span className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-[10px] font-medium uppercase text-amber-600">Not connected</span>}
                 </div>
                 {connector.docs && <a href={connector.docs} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs text-primary hover:underline">API documentation</a>}
-                {item && <p className="mt-3 truncate font-mono text-[11px] text-muted-foreground">{item.key_hint}</p>}
+                {item && <p className="mt-3 truncate text-[11px] text-muted-foreground">{item.provider === "slack" ? `${item.workspace_name ?? "Slack workspace"}${item.channel_name ? ` · #${item.channel_name}` : ""}` : item.key_hint}</p>}
               </div>
               <div className="flex min-h-14 items-center justify-end gap-2 border-t border-border bg-secondary/30 px-4 py-2">
                 {connector.comingSoon ? <Button size="sm" variant="outline" disabled><Clock3 className="size-3.5" /> Coming soon</Button>
-                  : item ? <><Button size="sm" variant="outline" disabled={connector.provider === "google_sheets" ? sheetExport.isPending : connector.provider === "hubspot" ? hubspotSync.isPending : connector.provider === "calendly" ? calendlyLoad.isPending : test.isPending} onClick={() => { if (connector.provider === "google_sheets") { const id = window.prompt("Paste the Google Spreadsheet ID (from its URL):"); if (id?.trim()) sheetExport.mutate(id.trim()); } else if (connector.provider === "hubspot") hubspotSync.mutate(); else if (connector.provider === "calendly") calendlyLoad.mutate(); else test.mutate(connector.provider!); }}>{connector.provider === "google_sheets" ? "Export leads" : connector.provider === "hubspot" ? "Sync contacts" : connector.provider === "calendly" ? "Load meetings" : "Test"}</Button><Button size="sm" variant="ghost" disabled={disconnect.isPending} onClick={() => { if (window.confirm(`Disconnect ${connector.name}?`)) disconnect.mutate(connector.provider!); }}><Unplug className="size-3.5" /> Disconnect</Button></>
+                  : item ? <><Button size="sm" variant="outline" disabled={connector.provider === "google_sheets" ? sheetExport.isPending : connector.provider === "hubspot" ? hubspotSync.isPending : connector.provider === "calendly" ? calendlyLoad.isPending : test.isPending} onClick={() => { if (connector.provider === "google_sheets") { const id = window.prompt("Paste the Google Spreadsheet ID (from its URL):"); if (id?.trim()) sheetExport.mutate(id.trim()); } else if (connector.provider === "hubspot") hubspotSync.mutate(); else if (connector.provider === "calendly") calendlyLoad.mutate(); else test.mutate(connector.provider!); }}>{connector.provider === "google_sheets" ? "Export leads" : connector.provider === "hubspot" ? "Sync contacts" : connector.provider === "calendly" ? "Load meetings" : "Test Slack"}</Button><Button size="sm" variant="ghost" disabled={disconnect.isPending} onClick={() => { if (window.confirm(`Disconnect ${connector.name}?`)) disconnect.mutate(connector.provider!); }}><Unplug className="size-3.5" /> Disconnect</Button></>
                   : connector.oauth ? <Button size="sm" onClick={() => { window.location.href = `/api/integrations/${connector.provider}/oauth/start`; }}><Link2 className="size-3.5" /> Connect</Button>
                   : <Button size="sm" onClick={() => setSelectedProvider(connector.provider!)}><Link2 className="size-3.5" /> Connect</Button>}
               </div>
