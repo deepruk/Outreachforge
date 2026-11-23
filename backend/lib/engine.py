@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from lib import mailer
 from lib.db import db
 from lib.util import new_id, now, start_of_today
+from lib.slack import send_hot_reply_alert
 
 log = logging.getLogger("engine")
 OOO_RE = re.compile(r"out of (the )?office|automatic reply|auto(-| )?reply|on vacation|on leave", re.I)
@@ -371,7 +372,9 @@ async def record_reply(user_id: str, lead: dict, sender_id: str, subject: str, b
     })
     # Create an in-app notification for every new inbound reply, not only hot leads.
     await notify_hot_reply(user_id, tid, label or "new_reply", contact_name, lead.get("company", ""), snippet, lead["campaign_id"])
-    camp = await db.campaigns.find_one({"id": lead["campaign_id"]}, {"_id": 0, "stop_on_reply": 1})
+    camp = await db.campaigns.find_one({"id": lead["campaign_id"]}, {"_id": 0, "stop_on_reply": 1, "name": 1})
+    if label in HOT_LABELS:
+        await send_hot_reply_alert(user_id, label, contact_name, lead.get("company", ""), snippet, (camp or {}).get("name", ""))
     if label != "out_of_office" and (camp or {}).get("stop_on_reply", True):
         await db.leads.update_one({"id": lead["id"]}, {"$set": {"status": "replied", "next_send_at": None}})
     # Every inbound reply counts in campaign analytics, including out-of-office replies.

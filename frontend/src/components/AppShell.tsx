@@ -63,7 +63,7 @@ const GROUPS = [
   },
   {
     title: "Workspace",
-    items: [{ to: "/connectors", label: "Connectors", icon: PlugZap, id: "connectors" }],
+    items: [{ to: "/connectors", label: "Integrations", icon: PlugZap, id: "connectors" }],
   },
   {
     title: "Insights",

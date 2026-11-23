@@ -22,7 +22,7 @@ from lib.util import new_id
 
 router = APIRouter(prefix="/integrations", tags=["Integrations"])
 log = logging.getLogger(__name__)
-Provider = Literal["apollo", "neverbounce", "zerobounce", "smartlead", "instantly", "google_sheets", "hubspot", "calendly"]
+Provider = Literal["apollo", "neverbounce", "zerobounce", "smartlead", "instantly", "google_sheets", "hubspot", "calendly", "slack"]
 
 PROVIDERS = {
     "apollo": {"name": "Apollo.io", "category": "Prospecting"},
@@ -33,6 +33,7 @@ PROVIDERS = {
     "google_sheets": {"name": "Google Sheets", "category": "Database"},
     "hubspot": {"name": "HubSpot", "category": "CRM"},
     "calendly": {"name": "Calendly", "category": "Scheduling"},
+    "slack": {"name": "Slack", "category": "Communication"},
 }
 
 
@@ -58,6 +59,7 @@ def _public(doc: dict) -> dict:
         "category": PROVIDERS[doc["provider"]]["category"],
         "key_hint": doc["key_hint"], "status": doc.get("status", "connected"),
         "created_at": doc["created_at"], "last_tested_at": doc.get("last_tested_at"),
+        "workspace_name": doc.get("workspace_name"), "channel_name": doc.get("channel_name"),
     }
 
 
@@ -139,6 +141,19 @@ async def connect_integration(body: ConnectBody, user: dict = Depends(current_us
     return _public(doc)
 
 
+@router.post("/slack/test")
+async def test_slack_integration(user: dict = Depends(current_user)):
+    from lib.slack import send_slack_test
+    ok, message = await send_slack_test(user["id"])
+    await db.integrations.update_one(
+        {"user_id": user["id"], "provider": "slack"},
+        {"$set": {"status": "connected" if ok else "error", "last_tested_at": datetime.now(timezone.utc)}},
+    )
+    if not ok:
+        raise HTTPException(status_code=502, detail=message)
+    return {"ok": True, "message": message}
+
+
 @router.post("/{provider}/test")
 async def test_integration(provider: Provider, user: dict = Depends(current_user)):
     doc = await db.integrations.find_one({"user_id": user["id"], "provider": provider})
@@ -188,6 +203,14 @@ OAUTH_CONFIG = {
         "authorize": "https://auth.calendly.com/oauth/authorize",
         "token": "https://auth.calendly.com/oauth/token",
         "scope": "scheduled_events:read users:read",
+        "extra": {},
+    },
+    "slack": {
+        "client_id": "SLACK_CLIENT_ID", "client_secret": "SLACK_CLIENT_SECRET",
+        "redirect_env": "SLACK_REDIRECT_URI",
+        "authorize": "https://slack.com/oauth/v2/authorize",
+        "token": "https://slack.com/api/oauth.v2.access",
+        "scope": "incoming-webhook",
         "extra": {},
     },
 }
@@ -259,14 +282,29 @@ async def oauth_callback(provider: str, request: Request):
             raise RuntimeError("OAuth token exchange failed")
         cipher = _cipher()
         now_utc = datetime.now(timezone.utc)
-        record = {
-            "id": new_id(), "user_id": state_doc["user_id"], "provider": provider,
-            "encrypted_access_token": cipher.encrypt(data["access_token"].encode()).decode(),
-            "encrypted_refresh_token": cipher.encrypt(data["refresh_token"].encode()).decode() if data.get("refresh_token") else None,
-            "token_expires_at": now_utc + timedelta(seconds=int(data.get("expires_in", 3600))),
-            "key_hint": "OAuth account", "status": "connected", "created_at": now_utc,
-            "last_tested_at": now_utc,
-        }
+        if provider == "slack":
+            webhook = data.get("incoming_webhook") or {}
+            if not data.get("ok") or not webhook.get("url"):
+                raise RuntimeError("Slack did not return an incoming webhook")
+            record = {
+                "id": new_id(), "user_id": state_doc["user_id"], "provider": provider,
+                "encrypted_webhook_url": cipher.encrypt(webhook["url"].encode()).decode(),
+                "workspace_id": (data.get("team") or {}).get("id"),
+                "workspace_name": (data.get("team") or {}).get("name") or "Slack workspace",
+                "channel_id": webhook.get("channel_id"),
+                "channel_name": webhook.get("channel"),
+                "key_hint": "OAuth workspace", "status": "connected", "created_at": now_utc,
+                "last_tested_at": now_utc,
+            }
+        else:
+            record = {
+                "id": new_id(), "user_id": state_doc["user_id"], "provider": provider,
+                "encrypted_access_token": cipher.encrypt(data["access_token"].encode()).decode(),
+                "encrypted_refresh_token": cipher.encrypt(data["refresh_token"].encode()).decode() if data.get("refresh_token") else None,
+                "token_expires_at": now_utc + timedelta(seconds=int(data.get("expires_in", 3600))),
+                "key_hint": "OAuth account", "status": "connected", "created_at": now_utc,
+                "last_tested_at": now_utc,
+            }
         await db.integrations.update_one(
             {"user_id": state_doc["user_id"], "provider": provider},
             {"$set": record}, upsert=True,
