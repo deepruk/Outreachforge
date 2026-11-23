@@ -18,7 +18,7 @@ def _decrypt_webhook(encrypted: str) -> str:
 
 
 async def _post_webhook(user_id: str, text: str) -> tuple[bool, str]:
-    doc = await db.integrations.find_one({"user_id": user_id, "provider": "slack", "status": "connected"})
+    doc = await db.integrations.find_one({"user_id": user_id, "provider": "slack"})
     if not doc or not doc.get("encrypted_webhook_url"):
         return False, "Connect a Slack workspace first."
     try:
