@@ -59,3 +59,14 @@ def test_choose_sender_prefers_max_remaining_capacity_for_new_lead():
     a = {"id": "sender-a"}
     b = {"id": "sender-b"}
     assert choose_sender([a, b], None, {"sender-a": 1, "sender-b": 4}) is b
+
+
+
+def test_100_percent_prioritizes_followups_even_when_new_queue_is_larger():
+    # Mirrors the scheduler's separately fetched buckets: a large new-lead
+    # backlog must not push due follow-ups out of the queue before sorting.
+    new_leads = make_leads(250, 0)
+    followups = make_leads(0, 25)
+    ordered = prioritize_due_leads(followups + new_leads, 100)
+    assert [lead["id"] for lead in ordered[:25]] == [f"f{i}" for i in range(25)]
+    assert all((lead.get("current_step") or 0) > 0 for lead in ordered[:25])
