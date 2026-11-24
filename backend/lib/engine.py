@@ -166,6 +166,18 @@ def sender_ready(s: dict) -> bool:
     return t is None or t <= now()
 
 
+def choose_sender(available: list[dict], assigned_sender_id: str | None,
+                  capacity: dict[str, int]) -> dict | None:
+    """Prefer the lead's original sender; otherwise use the available sender with most capacity."""
+    if not available:
+        return None
+    if assigned_sender_id:
+        original = next((s for s in available if s["id"] == assigned_sender_id), None)
+        if original is not None:
+            return original
+    return max(available, key=lambda sender: capacity.get(sender["id"], 0))
+
+
 def prioritize_due_leads(leads: list[dict], followup_priority: int) -> list[dict]:
     """Order an already-due queue by the configured follow-up share.
 
@@ -245,14 +257,12 @@ async def process_campaign(c: dict) -> None:
         # is resting between sends, use another campaign sender with capacity.
         # Every follow-up still references the first message's Message-ID below.
         original_sender_id = lead.get("sender_id")
-        sender = next((s for s in avail if s["id"] == original_sender_id), None) if original_sender_id else None
-        if sender is None:
-            sender = max(avail, key=lambda s: capacity[s["id"]])
-            if original_sender_id and sender["id"] != original_sender_id:
-                log.info(
-                    "follow-up sender fallback lead=%s original_sender=%s selected_sender=%s",
-                    lead["id"], original_sender_id, sender["id"],
-                )
+        sender = choose_sender(avail, original_sender_id, capacity)
+        if original_sender_id and sender["id"] != original_sender_id:
+            log.info(
+                "follow-up sender fallback lead=%s original_sender=%s selected_sender=%s",
+                lead["id"], original_sender_id, sender["id"],
+            )
         if await db.unsubscribes.find_one({"user_id": c["user_id"], "email": lead["email"]}):
             await db.leads.update_one({"id": lead["id"]}, {"$set": {"status": "unsubscribed", "next_send_at": None}})
             continue
