@@ -234,18 +234,25 @@ async def process_campaign(c: dict) -> None:
             continue
         avail = [s for s in senders if capacity.get(s["id"], 0) > 0 and sender_ready(s) and sender_started(c, s, lead)]
         if not avail:
-            break
+            # This lead cannot send right now, but do not block other due leads
+            # that may have a sender with available capacity.
+            continue
         idx = lead.get("current_step", 0)
         if idx >= len(steps):
             await db.leads.update_one({"id": lead["id"]}, {"$set": {"status": "completed"}})
             continue
-        # keep one sender per lead so follow-ups thread correctly
-        sender = next((s for s in avail if s["id"] == lead.get("sender_id")), None) if lead.get("sender_id") else None
-        if lead.get("sender_id") and sender is None:
-            if any(s["id"] == lead["sender_id"] for s in senders):
-                continue  # assigned sender is out of quota today
+        # Prefer the original sender. If it has exhausted its daily quota or
+        # is resting between sends, use another campaign sender with capacity.
+        # Every follow-up still references the first message's Message-ID below.
+        original_sender_id = lead.get("sender_id")
+        sender = next((s for s in avail if s["id"] == original_sender_id), None) if original_sender_id else None
+        if sender is None:
             sender = max(avail, key=lambda s: capacity[s["id"]])
-        sender = sender or max(avail, key=lambda s: capacity[s["id"]])
+            if original_sender_id and sender["id"] != original_sender_id:
+                log.info(
+                    "follow-up sender fallback lead=%s original_sender=%s selected_sender=%s",
+                    lead["id"], original_sender_id, sender["id"],
+                )
         if await db.unsubscribes.find_one({"user_id": c["user_id"], "email": lead["email"]}):
             await db.leads.update_one({"id": lead["id"]}, {"$set": {"status": "unsubscribed", "next_send_at": None}})
             continue
