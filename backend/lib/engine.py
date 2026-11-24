@@ -228,13 +228,31 @@ async def process_campaign(c: dict) -> None:
     if not senders:
         return
     capacity = {s["id"]: int(s.get("daily_limit") or 0) - await sent_today(s["id"]) for s in senders}
-    leads = await db.leads.find(
-        {"campaign_id": c["id"], "status": {"$in": ["pending", "in_progress"]}, "next_send_at": {"$lte": n}},
+    due_filter = {
+        "campaign_id": c["id"],
+        "status": {"$in": ["pending", "in_progress"]},
+        "next_send_at": {"$lte": n},
+    }
+    # Fetch each queue independently. Fetching the oldest 200 overall first
+    # can fill the entire page with new leads and hide due follow-ups before
+    # the priority setting ever gets a chance to order them.
+    followup_leads = await db.leads.find(
+        {**due_filter, "current_step": {"$gt": 0}},
         {"_id": 0},
     ).sort("next_send_at", 1).to_list(200)
-    # Apply the configured share to the already-due queue; each bucket remains FIFO.
+    new_leads = await db.leads.find(
+        {**due_filter, "$or": [{"current_step": 0}, {"current_step": None}]},
+        {"_id": 0},
+    ).sort("next_send_at", 1).to_list(200)
+    leads = followup_leads + new_leads
+    # Apply the configured share after both queues have been fetched; each
+    # bucket remains FIFO. At 100%, every fetched due follow-up precedes new leads.
     priority = c.get("followup_priority", 50)
     leads = prioritize_due_leads(leads, priority)
+    log.info(
+        "campaign queue campaign=%s priority=%s due_followups=%s due_new=%s",
+        c["id"], priority, len(followup_leads), len(new_leads),
+    )
     # Fetch the workspace default signature once per campaign tick; used as a fallback below.
     user = await db.users.find_one({"id": c["user_id"]}, {"_id": 0, "default_signature": 1})
     workspace_signature = ((user or {}).get("default_signature") or "").strip()
