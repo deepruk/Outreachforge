@@ -37,6 +37,14 @@ def classify_reply(subject: str, body: str) -> str | None:
     return None
 
 
+def reply_suppression_operation(user_id: str, email: str, at):
+    """Return the user-scoped, cross-campaign lead update for any inbound reply."""
+    return (
+        {"user_id": user_id, "email": email.strip().lower(), "status": {"$nin": ["bounced", "unsubscribed"]}},
+        {"$set": {"status": "replied", "next_send_at": None, "replied_at": at}},
+    )
+
+
 async def notify_hot_reply(user_id: str, thread_id: str, label: str, contact_name: str, company: str,
                            snippet: str, campaign_id: str) -> None:
     camp = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0, "name": 1}) or {}
@@ -428,10 +436,8 @@ async def record_reply(user_id: str, lead: dict, sender_id: str, subject: str, b
     # the address across every campaign owned by this user, not only the matched
     # lead record, so another active sequence cannot continue contacting them.
     lead_email = (lead.get("email") or from_email).strip().lower()
-    await db.leads.update_many(
-        {"user_id": user_id, "email": lead_email, "status": {"$nin": ["bounced", "unsubscribed"]}},
-        {"$set": {"status": "replied", "next_send_at": None, "replied_at": at}},
-    )
+    suppression_filter, suppression_update = reply_suppression_operation(user_id, lead_email, at)
+    await db.leads.update_many(suppression_filter, suppression_update)
     # Every inbound reply counts in campaign analytics, including out-of-office
     # and unclassified replies. Mark all prior campaign messages for this address.
     lead_ids = await db.leads.distinct("id", {"user_id": user_id, "email": lead_email})
