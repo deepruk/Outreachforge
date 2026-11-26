@@ -260,6 +260,15 @@ async def process_campaign(c: dict) -> None:
     for lead in leads:
         if sent_now >= min(budget, 25):
             break
+        # Re-read immediately before processing: the queue snapshot may predate
+        # a reply sync that has already suppressed this lead.
+        fresh_lead = await db.leads.find_one(
+            {"id": lead["id"], "user_id": c["user_id"], "status": {"$in": ["pending", "in_progress"]}},
+            {"_id": 0},
+        )
+        if not fresh_lead:
+            continue
+        lead = fresh_lead
         if not in_send_window(c, lead):
             continue
         avail = [s for s in senders if capacity.get(s["id"], 0) > 0 and sender_ready(s) and sender_started(c, s, lead)]
@@ -324,6 +333,14 @@ async def process_campaign(c: dict) -> None:
             track_clicks = False
         preheader = mailer.spin(mailer.render_vars(step.get("preheader") or "", lead))
         html = mailer.build_html(body, mid, base_url(), track_opens, track_clicks, preheader=preheader)
+        # Final suppression check immediately before the provider send call. This
+        # prevents stale queue entries from sending after an inbound reply was synced.
+        still_sendable = await db.leads.find_one(
+            {"id": lead["id"], "user_id": c["user_id"], "status": {"$in": ["pending", "in_progress"]}},
+            {"_id": 0, "id": 1},
+        )
+        if not still_sendable:
+            continue
         try:
             header_id = await deliver(sender, lead["email"], subject, html, body,
                                       first["message_id_header"] if first else None,
@@ -406,14 +423,27 @@ async def record_reply(user_id: str, lead: dict, sender_id: str, subject: str, b
     })
     # Create an in-app notification for every new inbound reply, not only hot leads.
     await notify_hot_reply(user_id, tid, label or "new_reply", contact_name, lead.get("company", ""), snippet, lead["campaign_id"])
-    camp = await db.campaigns.find_one({"id": lead["campaign_id"]}, {"_id": 0, "stop_on_reply": 1})
-    if label != "out_of_office" and (camp or {}).get("stop_on_reply", True):
-        await db.leads.update_one({"id": lead["id"]}, {"$set": {"status": "replied", "next_send_at": None}})
-    # Every inbound reply counts in campaign analytics, including out-of-office replies.
-    # Keep out-of-office labeling and stop-on-reply behavior separate from reply counting.
-    last = await db.messages.find({"lead_id": lead["id"]}, {"_id": 0, "id": 1, "replied_at": 1}).sort("sent_at", -1).to_list(1)
-    if last and not last[0].get("replied_at"):
-        await db.messages.update_one({"id": last[0]["id"]}, {"$set": {"replied_at": at}})
+    # Any genuine inbound response suppresses automated outreach, regardless of
+    # classification (including out-of-office and unclassified replies). Suppress
+    # the address across every campaign owned by this user, not only the matched
+    # lead record, so another active sequence cannot continue contacting them.
+    lead_email = (lead.get("email") or from_email).strip().lower()
+    await db.leads.update_many(
+        {"user_id": user_id, "email": lead_email, "status": {"$nin": ["bounced", "unsubscribed"]}},
+        {"$set": {"status": "replied", "next_send_at": None, "replied_at": at}},
+    )
+    # Every inbound reply counts in campaign analytics, including out-of-office
+    # and unclassified replies. Mark all prior campaign messages for this address.
+    lead_ids = await db.leads.distinct("id", {"user_id": user_id, "email": lead_email})
+    await db.messages.update_many(
+        {"user_id": user_id, "lead_id": {"$in": lead_ids}, "replied_at": None},
+        {"$set": {"replied_at": at}},
+    )
+    last = await db.messages.find(
+        {"user_id": user_id, "lead_id": lead["id"], "replied_at": at},
+        {"_id": 0, "id": 1},
+    ).sort("sent_at", -1).to_list(1)
+    if last:
         await db.campaigns.update_one({"id": lead["campaign_id"]}, {"$inc": {"replies": 1}})
     return True
 
