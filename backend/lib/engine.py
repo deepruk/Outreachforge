@@ -407,6 +407,13 @@ async def record_reply(user_id: str, lead: dict, sender_id: str, subject: str, b
     at = now()
     snippet = " ".join(body.split())[:160]
     label = classify_reply(subject, body)
+    # Any genuine inbound response suppresses automated outreach, regardless of
+    # classification (including out-of-office and unclassified replies). Suppress
+    # the address across every campaign owned by this user, not only the matched
+    # lead record, so another active sequence cannot continue contacting them.
+    lead_email = (lead.get("email") or from_email).strip().lower()
+    suppression_filter, suppression_update = reply_suppression_operation(user_id, lead_email, at)
+    await db.leads.update_many(suppression_filter, suppression_update)
     thread = await db.threads.find_one({"user_id": user_id, "lead_id": lead["id"]}, {"_id": 0})
     if thread:
         upd = {"snippet": snippet, "last_at": at, "unread": True}
@@ -431,13 +438,6 @@ async def record_reply(user_id: str, lead: dict, sender_id: str, subject: str, b
     })
     # Create an in-app notification for every new inbound reply, not only hot leads.
     await notify_hot_reply(user_id, tid, label or "new_reply", contact_name, lead.get("company", ""), snippet, lead["campaign_id"])
-    # Any genuine inbound response suppresses automated outreach, regardless of
-    # classification (including out-of-office and unclassified replies). Suppress
-    # the address across every campaign owned by this user, not only the matched
-    # lead record, so another active sequence cannot continue contacting them.
-    lead_email = (lead.get("email") or from_email).strip().lower()
-    suppression_filter, suppression_update = reply_suppression_operation(user_id, lead_email, at)
-    await db.leads.update_many(suppression_filter, suppression_update)
     # Every inbound reply counts in campaign analytics, including out-of-office
     # and unclassified replies. Mark all prior campaign messages for this address.
     lead_ids = await db.leads.distinct("id", {"user_id": user_id, "email": lead_email})
